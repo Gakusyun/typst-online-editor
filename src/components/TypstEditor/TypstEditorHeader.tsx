@@ -62,7 +62,7 @@ export default function TypstEditorHeader({
 					</span>
 				)
 			default:
-				return 'Ready'
+				return '就绪'
 		}
 	}
 
@@ -73,7 +73,7 @@ export default function TypstEditorHeader({
 					<h1 className="text-xl font-semibold">Typst 在线编辑器</h1>
 					{isMobile && (
 						<a
-							href="https://github.com/Mapaor/typst-online-editor"
+							href="https://github.com/Gakusyun/typst-online-editor"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
@@ -94,7 +94,7 @@ export default function TypstEditorHeader({
 
 				{!isMobile && (
 					<a
-						href="https://github.com/Mapaor/typst-online-editor"
+						href="https://github.com/Gakusyun/typst-online-editor"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
