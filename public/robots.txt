@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://typst-online-editor.pages.dev/sitemap.xml

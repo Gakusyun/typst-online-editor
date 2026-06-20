@@ -1,5 +1,10 @@
 import TypstEditor from '@/components/TypstEditor'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 export default function App() {
-  return <TypstEditor />
+	return (
+		<ErrorBoundary>
+			<TypstEditor />
+		</ErrorBoundary>
+	)
 }

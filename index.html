@@ -1,14 +1,54 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Typst Online</title>
-    <meta name="description" content="Edit and compile Typst documents thanks to WebAssembly." />
+    <meta name="color-scheme" content="dark light" />
+
+    <title>Typst Online Editor - 在线 Typst 编辑器</title>
+    <meta name="description" content="在线编辑和编译 Typst 文档，基于 WebAssembly 在浏览器中运行。支持实时预览、中文字体、文件管理。" />
+    <meta name="keywords" content="typst, online editor, wasm, 在线编辑器, 排版, 论文, latex alternative" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Typst Online Editor - 在线编辑器" />
+    <meta property="og:description" content="在线编辑和编译 Typst 文档，浏览器原生运行，无需安装。" />
+    <meta property="og:image" content="/favicon.svg" />
+    <meta property="og:locale" content="zh_CN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Typst Online Editor" />
+    <meta name="twitter:description" content="在线编辑和编译 Typst 文档，浏览器原生运行。" />
+
+    <!-- Robots -->
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://typst-online-editor.pages.dev" />
+
+    <!-- Preconnect to CDN origins for faster WASM/font loading -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Typst Online Editor",
+      "applicationCategory": "EditorApplication",
+      "operatingSystem": "Web",
+      "description": "在线编辑和编译 Typst 文档，基于 WebAssembly 在浏览器中运行。",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+    </script>
+
+    <!-- Vite entry -->
+    <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
