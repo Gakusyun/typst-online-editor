@@ -88,6 +88,17 @@ export const TYPST_EXAMPLES: TypstExample[] = [
 			{ path: 'RobotoRegular.ttf', filePath: `${import.meta.env.BASE_URL}typst-examples/using-fonts/RobotoRegular.ttf` },
 			{ path: 'Andropabe.ttf', filePath: `${import.meta.env.BASE_URL}typst-examples/using-fonts/Andropabe.ttf` },
 		]
+	},
+	{
+		id: 'chinese-fonts',
+		name: '使用中文字体',
+		description: '使用思源宋体和思源黑体进行中文排版',
+		filePath: `${import.meta.env.BASE_URL}typst-examples/chinese-fonts/main.typ`,
+		isMultiFile: true,
+		additionalFiles: [
+			{ path: 'SourceHanSerifSC-Regular.otf', filePath: 'https://raw.githubusercontent.com/adobe-fonts/source-han-serif/release/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf' },
+			{ path: 'SourceHanSansSC-Regular.otf', filePath: 'https://raw.githubusercontent.com/adobe-fonts/source-han-sans/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf' },
+		]
 	}
 ]
 
