@@ -15,7 +15,7 @@ Compile pipeline — every link is load-bearing; changing one means checking the
 1. **Edit** — `CodeEditor.tsx` (transparent `<textarea>` over a Shiki-highlighted `<pre>`; live text is wired via **`onInput`**, see Preact idioms) → `TypstEditor.tsx` → `useProjectFileOperations.updateActiveFileContent` → `useProjectState.saveProject` (localStorage via the `projectStorage` singleton).
 2. **Trigger** — `useProjectState`'s `useEffect([currentProject, onProjectChange])` reduces `Project.files` to `Record<string, string>` → `useTypstCompiler.compileDebounced` (1000 ms `debounce` from `src/lib/utils/helpers.ts`).
 3. **Service** — `src/lib/typst/TypstCompilerService.compile()` splits text files from `data:`-URL binaries (images **and** fonts) and calls `TypstWorkerClient.compilePdf()`.
-4. **Worker** — `src/lib/typst/typst.worker.ts` owns all WASM/compiler lifecycle: fetches the compiler wasm and fonts **CDN-first** (jsdmirror, 8 s timeout incl. body read) with fallback to `public/wasm/` + `public/fonts/`, lazily upgrades the compiler with emoji/CJK fonts based on content regexes, injects user `.ttf/.otf` uploads via `mapShadow`, resolves Typst Universe packages (`FetchPackageRegistry`), serializes jobs through `compileQueue`.
+4. **Worker** — `src/lib/typst/typst.worker.ts` owns all WASM/compiler lifecycle: fetches the compiler wasm and fonts **from CDN mirrors only** (jsdmirror; nothing is self-hosted in `public/`, so compiling needs network access), lazily upgrades the compiler with emoji/CJK fonts based on content regexes, injects user `.ttf/.otf` uploads via `mapShadow`, resolves Typst Universe packages (`FetchPackageRegistry`), serializes jobs through `compileQueue`.
 5. **Result** — `{type: 'compile-result', id, ok, pdf, diagnostics}` (worker protocol; types are **duplicated** in `typstClient.ts` and `typst.worker.ts` — keep in sync). `TypstCompilerService` wraps the PDF in a blob URL and notifies `CompileListener`s; `useTypstCompiler` mirrors this into React state (`status`, `pdfUrl`, `errorMsg`, `hasCompiled`).
 6. **Preview** — `PDFViewer/hooks/usePdfRenderer.ts` renders each page to canvas + pdf.js `TextLayer`/`AnnotationLayer` via lazy `getPdfjs()` (`src/lib/pdf/pdfjs.ts`).
 
@@ -32,8 +32,6 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
 |`src/lib/i18n/`|UI strings + `I18n` contract: `messages.ts` (zh/en/de catalogs), `i18n.ts` (`Lang`, `I18n`, `translate`), `useI18n.ts`, `I18nProvider.tsx`|
-|`public/wasm/`|28 MB Typst WASM binary, **checked into git**; must match the installed `@myriaddreamin` version (see Known Quirks)|
-|`public/fonts/`|IBM Plex, DejaVu Mono, Libertinus Serif, NewCM (core, incl. Typst's default text set — self-hosted, never load from CDN); Noto CJK + NotoColorEmoji (lazy, content-detected)|
 |`public/textmate-sintax/`|Typst TextMate grammar for Shiki — spelling is *sic*, don't "fix" it|
 
 ## Development Commands
@@ -60,7 +58,7 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - **Styling** — Tailwind v4 utilities in JSX (CSS-first config: `@import "tailwindcss"`, **no** `tailwind.config.*`; Tailwind runs through the `@tailwindcss/vite` plugin, no PostCSS config). Inline `style` only for dynamic sizing; `src/styles/globals.css` holds the Shiki `pre-wrap` override. Icons: `lucide-preact`.
 - **Typing** — `strict: true`; typed arrays as `Uint8Array<ArrayBuffer>` (TS ≥ 5.7 feature); `as unknown as` casts allowed where `pdfjs-dist`/worker typings are wrong — keep the explanatory comments. TypeScript 7 has **no JS compiler API**, which is why the lint toolchain is oxlint, not typescript-eslint.
 
-**Recipe — add fonts:** drop files in `public/fonts/`, register in `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `typst.worker.ts`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
+**Recipe — add fonts:** add the CDN URL (base in `FONT_CDN_BASE`) to `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `typst.worker.ts` — fonts are CDN-only, nothing is self-hosted in `public/`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
 
 **Recipe — add a language:** add a catalog to `src/lib/i18n/messages.ts` (typed against the `en` base — a missing key fails `tsc`), then register the code in `LANGS` and its endonym in `LANG_LABELS` (`src/lib/i18n/i18n.ts`). New UI strings go in `messages.ts` only; components read them via `useI18n().t`, never as JSX literals.
 
@@ -71,7 +69,7 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - `src/lib/typst/TypstCompilerService.ts` — public compile API (`addListener`, `compile`, `getCurrentPdfUrl`, `dispose`).
 - `src/components/TypstEditor/TypstEditor.tsx` — wiring point for all UI ↔ compiler flows.
 - `vite.config.ts` — `@preact/preset-vite`, `@tailwindcss/vite`, `@` → `src` alias. Subpath deploys use the `--base` CLI flag, not config edits.
-- `tsconfig.json` — `strict`, `jsx: react-jsx` + `jsxImportSource: preact`, `types: ["vite/client", "node"]`, `@/*` alias; `public/wasm/typst_ts_web_compiler_bg.wasm` — fetched at runtime from `public/`, never imported by the bundler.
+- `tsconfig.json` — `strict`, `jsx: react-jsx` + `jsxImportSource: preact`, `types: ["vite/client", "node"]`, `@/*` alias; the compiler wasm is fetched from the CDN pin at runtime, never imported by the bundler.
 
 ## Runtime / Tooling Preferences
 
@@ -98,10 +96,8 @@ If tests are ever added, the hard-to-test surfaces are: the worker + WASM bounda
 ## Known Quirks
 
 - `public/textmate-sintax/` is misspelled (*sic*) — `CodeEditor.tsx`'s fetch path depends on it.
-- **`public/wasm/typst_ts_web_compiler_bg.wasm` must match the installed `@myriaddreamin/typst.ts` version.** After upgrading `@myriaddreamin/*`, refresh it from `node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm`; a mismatch surfaces at compile time as `wasm.__wasm_bindgen_func_elem_N is not a function`.
-- Font URLs in `typst.worker.ts` are root-absolute `/fonts/...` and **ignore the base path** → fonts break on `--base` subpath deployments (known bug).
-- CDN-first loading with local fallback (`CDN_FETCH_TIMEOUT_MS` in `typst.worker.ts`, timeout covers headers **and** body): wasm/fonts via `cdn.jsdmirror.com`, pdf.js worker via `registry.npmmirror.com` (`src/lib/pdf/pdfjs.ts`). The copies in `public/` guarantee offline operation; pinned CDN refs (`typst-ts-web-compiler@0.7.0`, `noto-emoji@v2.047`, `typst-assets@v0.13.1`) must be bumped alongside upgrades.
-- The commented "OPTION 1" CDN block in `typst.worker.ts` contains a broken string literal — don't copy it verbatim.
+- **`TYPST_WASM_CDN_URL` in `typst.worker.ts` must match the installed `@myriaddreamin/typst.ts` version.** After upgrading `@myriaddreamin/*`, bump the pin (`typst-ts-web-compiler@0.7.0`); a mismatch surfaces at compile time as `wasm.__wasm_bindgen_func_elem_N is not a function`.
+- All compiler assets are **CDN-only**: wasm/fonts via `cdn.jsdmirror.com` (`typst.worker.ts`), pdf.js worker via `registry.npmmirror.com` (`src/lib/pdf/pdfjs.ts`). There is **no local fallback** — the app cannot compile offline, and CDN downloads are plain `fetch` with no timeout bound. Pinned CDN refs (`typst-ts-web-compiler@0.7.0`, `typst-assets@v0.13.1`, `typst-dev-assets@v0.13.1`, `noto-cjk@main`, `noto-emoji@v2.047`) must be bumped alongside upgrades.
 - `main.typ` protections are literal string checks (`path === 'main.typ'`), not `project.mainFile`.
 - Folder detection = "path has no dot" — extension-less files are treated as folders by rename/delete.
 - Dead code: `resetCompiler()` in the worker (no message invokes it), `PdfPreviewProps.fileCount/charCount` (never used), `ProjectStorage.getStorageSize`/`isStorageNearLimit` (no call sites).

@@ -41,93 +41,60 @@ type CompileResponse =
 // Configuration
 // ============================================================================
 
-// OPTION 1: Load from CDN (jsdelivr)
-// Pros: No local storage needed, always up-to-date, shared cache across sites
-// Cons: Requires internet connection, slower initial load, external dependency
-/*
-const TYPST_VERSION = '0.7.0-rc2';
-const TYPST_WASM_URL = `https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@${TYPST_VERSION}/pkg/typst_ts_web_compiler_bg.wasm`;
+// All compiler assets (wasm + fonts) load from CDN mirrors — nothing is
+// self-hosted in public/, so compiling needs network access. Keep the pinned
+// versions in sync with the installed @myriaddreamin/* packages.
+const TYPST_WASM_URL = 'https://cdn.jsdmirror.com/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm';
 
-const CORE_FONTS: string[] = [
-	https://cdn.jsdelivr.net/gh/typst/typst-dev-assets@v0.13.1/files/fonts/IBMPlexSans-Regular.ttf',
-	'https://cdn.jsdelivr.net/gh/typst/typst-dev-assets@v0.13.1/files/fonts/IBMPlexSans-Bold.ttf',
-	'https://cdn.jsdelivr.net/gh/typst/typst-assets@v0.13.1/files/fonts/NewCMMath-Regular.otf',
-	'https://cdn.jsdelivr.net/gh/typst/typst-assets@v0.13.1/files/fonts/NewCMMath-Book.otf'
-];
-
-const EMOJI_FONTS: string[] = [
-	'https://fonts.gstatic.com/s/notocoloremoji/v37/Yq6P-KqIXTD0t4D9z1ESnKM3-HpFab4.ttf'
-];
-
-const CJK_FONTS: string[] = [
-	'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf',
-	'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Bold.otf'
-];
-*/
-
-// OPTION 2: Load from local public folder (CURRENT - Recommended for offline use)
-// Pros: Faster loading, works offline, no external dependencies, predictable performance
-// Cons: Increases bundle size, requires manual updates, uses local storage
-
-
-// const TYPST_WASM_URL = '/wasm/typst_ts_web_compiler_bg.wasm'; (Same shit but the below line is in case you also export to a static site)
-const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
-const TYPST_WASM_URL = `${publicBasePath}/wasm/typst_ts_web_compiler_bg.wasm`;
-
-// CDN-first, local fallback: the mirrors accelerate the big downloads, but nothing may
-// hang on them — every CDN fetch is bounded by CDN_FETCH_TIMEOUT_MS and falls back to
-// the local copy in public/. Keep pinned versions in sync with @myriaddreamin/*.
-const CDN_FETCH_TIMEOUT_MS = 8000;
-const TYPST_WASM_CDN_URL = 'https://cdn.jsdmirror.com/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm';
-
-// Font file name -> mirror base URL. Matched against the file name only; anything
-// unmatched (e.g. data: URLs of user-uploaded fonts) is fetched as-is.
-const CDN_FONT_MIRRORS: Array<{ pattern: RegExp; base: string }> = [
-	// Typst's default text font set
-	{ pattern: /^(?:DejaVuSansMono|LibertinusSerif|NewCM)/, base: 'https://cdn.jsdmirror.com/gh/typst/typst-assets@v0.13.1/files/fonts/' },
-	{ pattern: /^IBMPlexSans-/, base: 'https://cdn.jsdmirror.com/gh/typst/typst-dev-assets@v0.13.1/files/fonts/' },
-	{ pattern: /^NotoSansCJKsc-/, base: 'https://cdn.jsdmirror.com/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/' },
-	{ pattern: /^NotoColorEmoji\.ttf$/, base: 'https://cdn.jsdmirror.com/gh/googlefonts/noto-emoji@v2.047/fonts/' },
-];
+// Font CDN bases (pinned; bump together with the wasm pin above).
+const FONT_CDN_BASE = {
+	// Typst's default text font set + math fonts
+	typstAssets: 'https://cdn.jsdmirror.com/gh/typst/typst-assets@v0.13.1/files/fonts/',
+	// IBM Plex Sans (UI fonts)
+	typstDevAssets: 'https://cdn.jsdmirror.com/gh/typst/typst-dev-assets@v0.13.1/files/fonts/',
+	// CJK fonts (loaded on demand)
+	notoCJK: 'https://cdn.jsdmirror.com/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/',
+	// Color emoji (loaded on demand)
+	notoEmoji: 'https://cdn.jsdmirror.com/gh/googlefonts/noto-emoji@v2.047/fonts/'
+} as const;
 
 
 const CORE_FONTS: string[] = [
-	// IBM Plex Sans (Modern UI fonts)
-	'/fonts/IBMPlexSans-Regular.ttf',
-	'/fonts/IBMPlexSans-Bold.ttf',
-	// Math fonts (Critical for mathematical formulas)
-	'/fonts/NewCMMath-Regular.otf',
-	'/fonts/NewCMMath-Book.otf',
-	// Typst's default text font set (serif body, mono, NewCM10). Self-hosted copies of the
-	// fonts typst.ts would otherwise download from cdn.jsdelivr.net via loadFonts'
-	// `assets: ['text']`. Keep these local: compiler.init hangs while the CDN is unreachable.
-	'/fonts/DejaVuSansMono.ttf',
-	'/fonts/DejaVuSansMono-Bold.ttf',
-	'/fonts/DejaVuSansMono-Oblique.ttf',
-	'/fonts/DejaVuSansMono-BoldOblique.ttf',
-	'/fonts/LibertinusSerif-Regular.otf',
-	'/fonts/LibertinusSerif-Bold.otf',
-	'/fonts/LibertinusSerif-Italic.otf',
-	'/fonts/LibertinusSerif-BoldItalic.otf',
-	'/fonts/LibertinusSerif-Semibold.otf',
-	'/fonts/LibertinusSerif-SemiboldItalic.otf',
-	'/fonts/NewCM10-Regular.otf',
-	'/fonts/NewCM10-Bold.otf',
-	'/fonts/NewCM10-Italic.otf',
-	'/fonts/NewCM10-BoldItalic.otf',
-	'/fonts/NewCMMath-Bold.otf'
+	// IBM Plex Sans (modern UI fonts)
+	FONT_CDN_BASE.typstDevAssets + 'IBMPlexSans-Regular.ttf',
+	FONT_CDN_BASE.typstDevAssets + 'IBMPlexSans-Bold.ttf',
+	// Math fonts (critical for mathematical formulas)
+	FONT_CDN_BASE.typstAssets + 'NewCMMath-Regular.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCMMath-Book.otf',
+	// Typst's default text font set (serif body, mono, NewCM10). Listed explicitly
+	// because `assets: false` disables typst.ts' built-in font asset loader.
+	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono.ttf',
+	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-Bold.ttf',
+	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-Oblique.ttf',
+	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-BoldOblique.ttf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Regular.otf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Bold.otf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Italic.otf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-BoldItalic.otf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Semibold.otf',
+	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-SemiboldItalic.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCM10-Regular.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCM10-Bold.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCM10-Italic.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCM10-BoldItalic.otf',
+	FONT_CDN_BASE.typstAssets + 'NewCMMath-Bold.otf'
 ];
 
 const EMOJI_FONTS: string[] = [
-	// Emoji support (Noto Color Emoji ~9MB) - Loaded on demand
-	'/fonts/NotoColorEmoji.ttf'
+	// Emoji support (Noto Color Emoji ~9 MB) — loaded on demand
+	FONT_CDN_BASE.notoEmoji + 'NotoColorEmoji.ttf'
 ];
 
 const CJK_FONTS: string[] = [
-	// CJK (Chinese/Japanese/Korean) fonts - Loaded on demand
-	// Note: These are large files (~15-20MB each)
-	'/fonts/NotoSansCJKsc-Regular.otf',
-	'/fonts/NotoSansCJKsc-Bold.otf'
+	// CJK (Chinese/Japanese/Korean) fonts — loaded on demand
+	// Note: these are large files (~15-20 MB each)
+	FONT_CDN_BASE.notoCJK + 'NotoSansCJKsc-Regular.otf',
+	FONT_CDN_BASE.notoCJK + 'NotoSansCJKsc-Bold.otf'
 ];
 
 // ============================================================================
@@ -155,78 +122,27 @@ const COMPILER_IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 // ============================================================================
 
 /**
- * Fetches a URL into an ArrayBuffer with a hard timeout (covering the body read, so a
- * stalled CDN stream can never hang init either) — throws on timeout or non-OK status
+ * Fetcher for the CDN-hosted wasm and fonts (also used as loadFonts' `fetcher`):
+ * throws on non-OK status so an error page can never reach the wasm or font parsers.
  */
-async function fetchArrayWithTimeout(url: string): Promise<ArrayBuffer> {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), CDN_FETCH_TIMEOUT_MS);
-	try {
-		const response = await fetch(url, { signal: controller.signal });
-		if (!response.ok) throw new Error(`HTTP ${response.status}`);
-		return await response.arrayBuffer();
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-/**
- * Font fetcher for loadFonts: tries the CDN mirror first, falls back to the local URL
- */
-const cdnFirstFontFetcher: typeof fetch = async (input) => {
-	const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-	const fileName = url.split('/').pop() ?? '';
-	const mirror = CDN_FONT_MIRRORS.find(m => m.pattern.test(fileName));
-	if (mirror) {
-		try {
-			return new Response(await fetchArrayWithTimeout(mirror.base + fileName));
-		} catch {
-			// CDN unreachable or slow — fall back to the local copy below
-		}
-	}
-	return fetch(url);
+const fetchCdn: typeof fetch = async (input, init) => {
+	const response = await fetch(input, init);
+	if (!response.ok) throw new Error(`HTTP ${response.status}`);
+	return response;
 };
-
-/**
- * Fetches the Typst WASM module (CDN first, local copy as fallback)
- */
-async function fetchWasmModule(): Promise<ArrayBuffer> {
-	try {
-		return await fetchArrayWithTimeout(TYPST_WASM_CDN_URL);
-	} catch {
-		// CDN unreachable or slow — fall back to the local copy below
-	}
-	// Construct absolute URL from worker's origin
-	const absoluteUrl = new URL(TYPST_WASM_URL, self.location.origin).href;
-	const response = await fetch(absoluteUrl);
-	return await response.arrayBuffer();
-}
-
-/**
- * Converts relative font URLs to absolute URLs (skips data URLs)
- */
-function resolveFont(fontPath: string): string {
-	// Data URLs should be passed through unchanged
-	if (fontPath.startsWith('data:')) {
-		return fontPath;
-	}
-	return new URL(fontPath, self.location.origin).href;
-}
 
 /**
  * Creates a compiler with specified fonts
  */
 async function createCompilerWithFonts(fonts: string[]): Promise<TypstCompiler> {
 	const compiler = createTypstCompiler();
-	// Resolve font paths to absolute URLs (data URLs are passed through)
-	const absoluteFonts = fonts.map(resolveFont);
 	await compiler.init({
-		getModule: fetchWasmModule,
+		getModule: async () => (await fetchCdn(TYPST_WASM_URL)).arrayBuffer(),
 		beforeBuild: [
 			// `assets: false` is required: with no options, TypstCompiler.init() appends a
 			// default font loader ({assets: ['text']}) that downloads typst's default font
-			// set from cdn.jsdelivr.net and hangs init when the CDN is unreachable.
-			loadFonts(absoluteFonts, { assets: false, fetcher: cdnFirstFontFetcher }),
+			// set from cdn.jsdelivr.net behind our back.
+			loadFonts(fonts, { assets: false, fetcher: fetchCdn }),
 			withAccessModel(accessModel),
 			withPackageRegistry(packageRegistry)
 		]
