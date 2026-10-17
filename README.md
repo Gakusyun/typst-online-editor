@@ -1,76 +1,85 @@
 # Typst Online Editor
 
-A lightweight web-based Typst editor that compiles documents directly in your browser using WebAssembly. No servers, everything client-side.
+> 本项目Fork自[Mapaor/typst-online-editor](https://github.com/Mapaor/typst-online-editor/)
+> 上游项目 [README](README.upstream.md)。
 
-Check it out here: [https://typst-online-editor.vercel.app](https://typst-online-editor.vercel.app).
+一个轻量的网页版 Typst 编辑器，通过 WebAssembly 在浏览器中直接编译文档。无需服务器，全部在客户端完成。
 
-## Tech used
+上游演示地址：[https://typst-online-editor.vercel.app](https://typst-online-editor.vercel.app)。
 
-This website is built with NextJS (React), Typst.ts (Typst for the javascript world made by [@myriaddreamin](https://github.com/Myriad-Dreamin)), PDF.js and Shiki.
+## 技术栈
 
-## Great things about the website
+基于 Next.js（React）构建，使用 [Typst.ts](https://github.com/Myriad-Dreamin/typst.ts)（[@myriaddreamin](https://github.com/Myriad-Dreamin) 开发的 Typst JavaScript 实现）、PDF.js 和 Shiki。
 
-- Everything is client-side thanks to Typst.ts (wasm file is from their CDN).
-- Full featured demo with different examples to load, file explorer, custom PDF preview and debounce compilation (compiles as you type).
-- Portable. The UI may not be framework-agnostic but the compiler logic is. You can find a more minimal version [here](https://github.com/Mapaor4/simple-typst-editor) and also another minimal Vite version [here](https://github.com/Mapaor/typst-online-vite).
+## 主要特性
 
-## How to use or deploy
-The following is basic knowledge of how to deploy a NextJS application but I'll say it in case someone is unfamiliar with it.
+- 借助 Typst.ts 实现全客户端编译（wasm 文件来自其 CDN）。
+- 完整的示例演示：可加载不同示例、文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
+- 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
-The easiest way is to fork the repository and then deploy it to Vercel.
+## 使用与部署
 
-Once deployed you can clone it locally and develop it. First install the dependencies:
+部署 Next.js 应用的基本步骤如下：
+
+最简单的方式是 fork 本仓库，然后部署到 Vercel。
+
+部署完成后可以克隆到本地开发。先安装依赖：
+
 ```
 npm install
 ```
-Then run the development server:
+
+然后启动开发服务器：
+
 ```
 npm run dev
 ```
-And open the localhost URL you get.
 
-The corresponding commands for those but in production mode (the commands that Vercel runs in their server) would be `npm run build` and `npm run start`.
+打开终端输出的 localhost 地址即可。
 
-Also if you want you can deploy this as a static site in GitHub Pages. That is done by exporting the NextJS app to static HTML+CSS+JS, explained in the following toggle.
+生产模式对应的命令（Vercel 服务器上运行的命令）是 `npm run build` 和 `npm run start`。
+
+也可以将应用导出为静态 HTML+CSS+JS，部署到 GitHub Pages，步骤见下方折叠内容。
+
 <details>
 
-<summary>Deploy as a static site</summary>
+<summary>部署为静态站点</summary>
 
-1. First you need  to uncomment the lines in `next.config.ts`
-2. Then create a `.env.production` with the following code:
+1. 先取消 `next.config.ts` 中相关行的注释
+2. 创建 `.env.production`，内容如下：
 
   ```
-  NEXT_PUBLIC_BASE_PATH="/typst-online-editor-static" # Put the desired name of your static repo here
+  NEXT_PUBLIC_BASE_PATH="/typst-online-editor-static" # 换成你的静态仓库名
   ```
 
-3. Then run `npm run build`
-3. The `out` generated folder is the one you can publish to GitHub Pages (it's contents, not the folder)
-4. Manually add a `.nojekyll` empty file at the root of the repository
-5. Now visit your site and check it works
-6. Go back to commenting the lines in `next.config.ts` and remove the `.env.production` file (or comment it's line) to leave your NextJS app as it was.
-  
-See the following static site as example: 
+3. 运行 `npm run build`
+4. 生成的 `out` 文件夹内容（不是文件夹本身）即为可发布到 GitHub Pages 的站点
+5. 在仓库根目录手动添加一个空的 `.nojekyll` 文件
+6. 访问站点确认可用
+7. 完成后重新注释 `next.config.ts` 中的行，并删除 `.env.production`（或注释其内容），恢复 Next.js 应用原状
+
+静态站点示例：
 
 [https://mapaor.github.io/typst-online-editor-static/](https://mapaor.github.io/typst-online-editor-static/)
 
 </details>
 
-## Credits
+## 致谢
 
-Credits mainly to Myriad-Dreamin for the creation of [typst.ts](https://github.com/Myriad-Dreamin/typst.ts), to [@cosformula](https://github.com/typst/typst) for the creation of [mdxport](https://github.com/cosformula/mdxport), which served as an inspiration for this demo, and obviously also to Martin Haug and Laurenz Mädje for the creation of [Typst](https://github.com/typst/typst).
+感谢 Myriad-Dreamin 创建 [typst.ts](https://github.com/Myriad-Dreamin/typst.ts)，感谢 [@cosformula](https://github.com/cosformula) 创建 [mdxport](https://github.com/cosformula/mdxport)（本演示的灵感来源），以及 Martin Haug 和 Laurenz Mädje 创建 [Typst](https://github.com/typst/typst)。
 
-## License
+## 许可证
 
-MIT License.
+MIT 许可证。
 
-This repo code is MIT Licensed, however the libraries used are:
-- @myriaddreamin/typst-ts-renderer"
-- @myriaddreamin/typst-ts-web-compiler"
-- @myriaddreamin/typst.ts"
+本仓库代码采用 MIT 许可证，但所使用的库：
+
+- @myriaddreamin/typst-ts-renderer
+- @myriaddreamin/typst-ts-web-compiler
+- @myriaddreamin/typst.ts
 - pdf.js
 - pdfjs-dist
 
-Which are, under Apache-2.0 license. At the same time Typst.ts uses the Typst compiler which is also licensed under Apache-2.0 license.
+均采用 Apache-2.0 许可证。Typst.ts 使用的 Typst 编译器同样采用 Apache-2.0 许可证。
 
-The Lucide icons used are licensed under MIT.
-
+所用 Lucide 图标采用 MIT 许可证。
