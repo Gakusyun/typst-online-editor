@@ -74,6 +74,22 @@ const CJK_FONTS: string[] = [
 const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
 const TYPST_WASM_URL = `${publicBasePath}/wasm/typst_ts_web_compiler_bg.wasm`;
 
+// CDN-first, local fallback: the mirrors accelerate the big downloads, but nothing may
+// hang on them — every CDN fetch is bounded by CDN_FETCH_TIMEOUT_MS and falls back to
+// the local copy in public/. Keep pinned versions in sync with @myriaddreamin/*.
+const CDN_FETCH_TIMEOUT_MS = 8000;
+const TYPST_WASM_CDN_URL = 'https://cdn.jsdmirror.com/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm';
+
+// Font file name -> mirror base URL. Matched against the file name only; anything
+// unmatched (e.g. data: URLs of user-uploaded fonts) is fetched as-is.
+const CDN_FONT_MIRRORS: Array<{ pattern: RegExp; base: string }> = [
+	// Typst's default text font set
+	{ pattern: /^(?:DejaVuSansMono|LibertinusSerif|NewCM)/, base: 'https://cdn.jsdmirror.com/gh/typst/typst-assets@v0.13.1/files/fonts/' },
+	{ pattern: /^IBMPlexSans-/, base: 'https://cdn.jsdmirror.com/gh/typst/typst-dev-assets@v0.13.1/files/fonts/' },
+	{ pattern: /^NotoSansCJKsc-/, base: 'https://cdn.jsdmirror.com/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/' },
+	{ pattern: /^NotoColorEmoji\.ttf$/, base: 'https://cdn.jsdmirror.com/gh/googlefonts/noto-emoji@v2.047/fonts/' },
+];
+
 
 const CORE_FONTS: string[] = [
 	// IBM Plex Sans (Modern UI fonts)
@@ -139,9 +155,47 @@ const COMPILER_IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 // ============================================================================
 
 /**
- * Fetches the Typst WASM module
+ * Fetches a URL into an ArrayBuffer with a hard timeout (covering the body read, so a
+ * stalled CDN stream can never hang init either) — throws on timeout or non-OK status
+ */
+async function fetchArrayWithTimeout(url: string): Promise<ArrayBuffer> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), CDN_FETCH_TIMEOUT_MS);
+	try {
+		const response = await fetch(url, { signal: controller.signal });
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		return await response.arrayBuffer();
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * Font fetcher for loadFonts: tries the CDN mirror first, falls back to the local URL
+ */
+const cdnFirstFontFetcher: typeof fetch = async (input) => {
+	const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+	const fileName = url.split('/').pop() ?? '';
+	const mirror = CDN_FONT_MIRRORS.find(m => m.pattern.test(fileName));
+	if (mirror) {
+		try {
+			return new Response(await fetchArrayWithTimeout(mirror.base + fileName));
+		} catch {
+			// CDN unreachable or slow — fall back to the local copy below
+		}
+	}
+	return fetch(url);
+};
+
+/**
+ * Fetches the Typst WASM module (CDN first, local copy as fallback)
  */
 async function fetchWasmModule(): Promise<ArrayBuffer> {
+	try {
+		return await fetchArrayWithTimeout(TYPST_WASM_CDN_URL);
+	} catch {
+		// CDN unreachable or slow — fall back to the local copy below
+	}
 	// Construct absolute URL from worker's origin
 	const absoluteUrl = new URL(TYPST_WASM_URL, self.location.origin).href;
 	const response = await fetch(absoluteUrl);
@@ -172,7 +226,7 @@ async function createCompilerWithFonts(fonts: string[]): Promise<TypstCompiler> 
 			// `assets: false` is required: with no options, TypstCompiler.init() appends a
 			// default font loader ({assets: ['text']}) that downloads typst's default font
 			// set from cdn.jsdelivr.net and hangs init when the CDN is unreachable.
-			loadFonts(absoluteFonts, { assets: false }),
+			loadFonts(absoluteFonts, { assets: false, fetcher: cdnFirstFontFetcher }),
 			withAccessModel(accessModel),
 			withPackageRegistry(packageRegistry)
 		]
