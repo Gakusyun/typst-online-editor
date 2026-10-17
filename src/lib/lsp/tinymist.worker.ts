@@ -8,9 +8,12 @@
 //   `sendEvent` callbacks; replies and event pumping are deferred to a
 //   microtask (a synchronous `on_response` triggers a wasm borrow panic).
 // - The analysis world cannot load fonts (BrowserFontSearcher only sees fonts
-//   embedded in the wasm build, which has text fonts but no math font), so
-//   valid documents using math report a vacuous "no font could be found"
-//   error. It is filtered below; the PDF pipeline compiles with real fonts.
+//   embedded in the wasm build, which has text fonts but no math font), and the
+//   wasm exposes no host font hook (no `queryLocalFonts` call, no font API in
+//   its JS glue). So valid documents using math report a vacuous "no font could
+//   be found" error, and families the compile pipeline reads from the machine
+//   are reported as `unknown font family: …`. Both are filtered below; the PDF
+//   pipeline compiles with real fonts.
 import {
 	loadTinymistModule,
 	type TinymistLanguageServer,
@@ -35,6 +38,7 @@ interface LspMessage {
 }
 
 const VACUOUS_FONT_DIAGNOSTIC = 'no font could be found'
+const UNKNOWN_FONT_FAMILY = /^unknown font family: (.+)$/
 const PACKAGE_TARBALL_URL = 'https://packages.typst.org'
 const PACKAGE_TEXT_FILE = /\.(typ|md|bib|txt|json|ya?ml|toml|csv)$/i
 const USER_DOC_URI = /^file:\/\/\//
@@ -47,11 +51,22 @@ const pending: LspMessage[] = []
 const docs = new Map<string, DocState>()
 const packages = new Map<string, string | null>()
 const projectFiles = new Set<string>()
+/** Lowercased families the compile pipeline reads from the machine. */
+const systemFontFamilies = new Set<string>()
+let systemFontFamilySignature = ''
+/** Raw diagnostics of the last publish per document, to re-filter on change. */
+const lastPublishedDiagnostics = new Map<string, unknown>()
 
-self.onmessage = (e: MessageEvent<{ type: string; message?: string; paths?: string[] }>) => {
+self.onmessage = (
+	e: MessageEvent<{ type: string; message?: string; paths?: string[]; families?: string[] }>
+) => {
 	const data = e.data
 	if (data.type === 'files' && Array.isArray(data.paths)) {
 		updateProjectFiles(data.paths)
+		return
+	}
+	if (data.type === 'system-fonts' && Array.isArray(data.families)) {
+		updateSystemFontFamilies(data.families)
 		return
 	}
 	if (data.type !== 'message' || typeof data.message !== 'string') return
@@ -143,6 +158,20 @@ function isLspError(value: unknown): value is { code: number; message: string } 
 	)
 }
 
+/** Applies the diagnostic filters and forwards the result to the client. */
+function publishDiagnostics(params: unknown): void {
+	const diagnostics = keptDiagnostics(params)
+	if (diagnostics && typeof params === 'object' && params !== null) {
+		post({
+			jsonrpc: '2.0',
+			method: 'textDocument/publishDiagnostics',
+			params: { ...params, diagnostics },
+		})
+	} else {
+		post({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params })
+	}
+}
+
 /** Drop vacuous diagnostics; returns null when params are malformed. */
 function keptDiagnostics(params: unknown): unknown[] | null {
 	if (typeof params !== 'object' || params === null || !('diagnostics' in params)) return null
@@ -152,6 +181,7 @@ function keptDiagnostics(params: unknown): unknown[] | null {
 	const text = uri ? docs.get(uri)?.text : undefined
 	return diagnostics.filter((d) => {
 		if (isVacuousFontDiagnostic(d)) return false
+		if (isSystemFontDiagnostic(d)) return false
 		// Files that exist in the project but cannot enter the analysis world
 		// (binary files, or files added after the document was analyzed) must
 		// not report "failed to load file".
@@ -163,6 +193,33 @@ function keptDiagnostics(params: unknown): unknown[] | null {
 function isVacuousFontDiagnostic(d: unknown): boolean {
 	if (typeof d !== 'object' || d === null || !('severity' in d) || !('message' in d)) return false
 	return d.severity === 1 && d.message === VACUOUS_FONT_DIAGNOSTIC
+}
+
+/**
+ * `unknown font family: <family>` for a family the compiler gets from the
+ * machine: the language server cannot load it (see the file header), so the
+ * warning is dropped to keep the editor in agreement with the PDF.
+ */
+function isSystemFontDiagnostic(d: unknown): boolean {
+	if (typeof d !== 'object' || d === null || !('message' in d) || typeof d.message !== 'string') {
+		return false
+	}
+	const match = UNKNOWN_FONT_FAMILY.exec(d.message)
+	return match !== null && systemFontFamilies.has(match[1].trim())
+}
+
+/**
+ * Families the compile pipeline resolved. The server may have published its
+ * `unknown font family` warnings before the set was known, so the cached
+ * publications are re-filtered here instead of waiting for a new analysis.
+ */
+function updateSystemFontFamilies(families: string[]): void {
+	const signature = families.join('\u0000')
+	if (signature === systemFontFamilySignature) return
+	systemFontFamilySignature = signature
+	systemFontFamilies.clear()
+	for (const family of families) systemFontFamilies.add(family.toLowerCase())
+	for (const params of lastPublishedDiagnostics.values()) publishDiagnostics(params)
 }
 
 function isMissingProjectFileDiagnostic(d: unknown, uri: string, text: string): boolean {
@@ -350,17 +407,13 @@ async function main(): Promise<void> {
 		sendNotification(notification: TinymistServerNotification) {
 			if (notification.method === 'tmLog') return
 			if (notification.method === 'textDocument/publishDiagnostics') {
-				const diagnostics = keptDiagnostics(notification.params)
 				const params = notification.params
-				if (diagnostics && typeof params === 'object' && params !== null) {
-					post({
-						jsonrpc: '2.0',
-						method: notification.method,
-						params: { ...params, diagnostics },
-					})
-				} else {
-					post({ jsonrpc: '2.0', method: notification.method, params: notification.params })
-				}
+				const uri =
+					typeof params === 'object' && params !== null && 'uri' in params && typeof params.uri === 'string'
+						? params.uri
+						: null
+				if (uri) lastPublishedDiagnostics.set(uri, params)
+				publishDiagnostics(params)
 				return
 			}
 			post({ jsonrpc: '2.0', method: notification.method, params: notification.params })

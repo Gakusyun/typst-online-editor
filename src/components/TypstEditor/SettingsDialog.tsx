@@ -10,11 +10,14 @@ import {
 	isFontAccessDenied,
 	isSystemFontsSupported,
 	querySystemFonts,
-} from '@/lib/appearance/localFonts'
+} from '@/lib/fonts/localFonts'
 import { useAppearance } from '@/lib/appearance/useAppearance'
 
 interface SettingsDialogProps {
 	onClose: () => void
+	/** Whether the compiler reads installed fonts the document references. */
+	documentSystemFonts: boolean
+	onDocumentSystemFontsChange(enabled: boolean): void
 }
 
 /** Outcome of the last attempt to enumerate the machine's fonts. */
@@ -25,7 +28,11 @@ type SystemFontsState =
 	| { status: 'denied' }
 	| { status: 'failed' }
 
-export default function SettingsDialog({ onClose }: SettingsDialogProps) {
+export default function SettingsDialog({
+	onClose,
+	documentSystemFonts,
+	onDocumentSystemFontsChange,
+}: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
 	const { uiFont, editorFont, setUiFont, setEditorFont } = useAppearance()
 	const [showFontFamilies, setShowFontFamilies] = useState(false)
@@ -56,13 +63,35 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 		apply(choice)
 	}
 
-	const loadSystemFonts = async () => {
+	const loadSystemFonts = async (options?: { refresh?: boolean }) => {
 		setSystemFonts({ status: 'loading' })
 		try {
-			setSystemFonts({ status: 'ready', families: fontFamilies(await querySystemFonts()) })
+			setSystemFonts({
+				status: 'ready',
+				families: fontFamilies(await querySystemFonts(options)),
+			})
+			return true
 		} catch (error) {
 			console.warn('[settings] could not list system fonts', error)
 			setSystemFonts({ status: isFontAccessDenied(error) ? 'denied' : 'failed' })
+			return false
+		}
+	}
+
+	/**
+	 * The document fonts are read through the same permission as the pickers, and
+	 * only a user gesture can grant it — so the toggle itself performs the first
+	 * enumeration and reports the outcome; without it the feature cannot work, so
+	 * a failure leaves the toggle off.
+	 */
+	const toggleDocumentSystemFonts = async () => {
+		if (documentSystemFonts) {
+			onDocumentSystemFontsChange(false)
+			return
+		}
+		if (!fontsSupported) return
+		if (systemFonts.status === 'ready' || (await loadSystemFonts())) {
+			onDocumentSystemFontsChange(true)
 		}
 	}
 
@@ -166,7 +195,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 						<div className="mt-3 flex items-center gap-2">
 							{fontsSupported && (
 								<button
-									onClick={loadSystemFonts}
+									onClick={() => loadSystemFonts({ refresh: true })}
 									disabled={systemFonts.status === 'loading'}
 									className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 text-white text-xs rounded hover:bg-gray-600 disabled:opacity-60 transition-colors"
 								>
@@ -184,6 +213,20 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 						</div>
 						<p className="mt-2 text-xs text-gray-500">
 							{fontsSupported ? t('settings.fontFamilyHint') : t('settings.fontsUnsupported')}
+						</p>
+
+						<label className="flex items-start gap-2 mt-4 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={documentSystemFonts}
+								disabled={!fontsSupported}
+								onChange={() => void toggleDocumentSystemFonts()}
+								className="mt-0.5 accent-blue-500"
+							/>
+							<span className="text-sm text-gray-300">{t('settings.documentFontsAuto')}</span>
+						</label>
+						<p className="mt-2 text-xs text-gray-500">
+							{fontsSupported ? t('settings.documentFontsHint') : t('settings.systemFontsDisabled')}
 						</p>
 					</div>
 
@@ -209,6 +252,27 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 									))}
 								</ul>
 								<p className="mt-2 text-xs text-gray-400">{t('settings.fontFamiliesHint')}</p>
+
+								<div className="mt-3 pt-2 border-t border-gray-700">
+									{systemFonts.status === 'ready' ? (
+										<>
+											<p className="text-xs text-gray-300">
+												{t('settings.systemFontFamilies', { count: families.length })}
+											</p>
+											<ul className="mt-1 max-h-48 overflow-y-auto space-y-0.5">
+												{families.map((family) => (
+													<li key={family} className="text-sm font-mono text-gray-200">
+														{family}
+													</li>
+												))}
+											</ul>
+										</>
+									) : (
+										<p className="text-xs text-gray-500">
+											{t('settings.systemFontFamiliesHint')}
+										</p>
+									)}
+								</div>
 							</div>
 						)}
 					</div>

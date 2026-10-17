@@ -6,6 +6,9 @@
  * is the point — a font installed in the *user* font directory is not always
  * reachable by `font-family` alone, so a chosen family is also registered as a
  * `FontFace` ({@link registerSystemFont}).
+ *
+ * Consumers: the app-chrome font pickers (`@/lib/appearance`) and the document
+ * fonts read for the compiler (`./documentFonts`).
  */
 
 /** The API bound to `navigator`, or `null` when unavailable (non-Chromium). */
@@ -18,14 +21,22 @@ export function isSystemFontsSupported(): boolean {
 	return queryFn() !== null
 }
 
+/** Last enumeration: font metadata only (no font data), safe to keep around. */
+let cachedFonts: LocalFontData[] | null = null
+
 /**
  * Every installed font. Throws when the API is unsupported or the permission is
  * denied; requires a user gesture while the permission is still in `prompt`.
+ *
+ * The result is cached — both the pickers and every compile ask for it — until
+ * `refresh` re-reads the machine's list.
  */
-export async function querySystemFonts(): Promise<LocalFontData[]> {
+export async function querySystemFonts(options?: { refresh?: boolean }): Promise<LocalFontData[]> {
+	if (cachedFonts && !options?.refresh) return cachedFonts
 	const query = queryFn()
 	if (!query) throw new Error('Local Font Access API is not available')
-	return await query()
+	cachedFonts = await query()
+	return cachedFonts
 }
 
 /** Distinct family names of `fonts`, in the user's locale order. */

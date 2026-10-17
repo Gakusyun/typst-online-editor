@@ -76,6 +76,15 @@ export class TinymistLspClient {
 		this.#worker.postMessage({ type: 'files', paths })
 	}
 
+	/**
+	 * Families the compile pipeline reads from the machine. The language server
+	 * cannot load them (see `./tinymist.worker`), so it only needs to stop
+	 * reporting them as unknown.
+	 */
+	setSystemFontFamilies(families: string[]): void {
+		this.#worker.postMessage({ type: 'system-fonts', families })
+	}
+
 	dispose(): void {
 		this.#worker.terminate()
 		this.#messageHandlers.clear()

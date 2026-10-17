@@ -44,6 +44,12 @@ export const en = {
 	'settings.fontsFailed': 'Could not read the system fonts',
 	'settings.fontFamilyHint': 'Must match an installed font (e.g. "JetBrains Mono"). Empty = default. The editor font also covers compile errors.',
 	'settings.fontsUnsupported': 'This browser cannot list system fonts — type a family name instead.',
+	'settings.documentFontsAuto': 'Load installed fonts the document uses',
+	'settings.documentFontsHint': 'A family the source sets with #set text(font: "…") is read from this machine for that compile and released as soon as it finishes. Uses the same permission as "Load system fonts".',
+	'settings.systemFontsDisabled': 'System fonts are unavailable in this browser.',
+	'settings.systemFontFamilies': 'System fonts available: {count}',
+	'settings.systemFontFamilies_one': 'System font available: {count}',
+	'settings.systemFontFamiliesHint': 'Load the system fonts to list the families this document can use.',
 	'common.close': 'Close',
 
 	// PDF preview
@@ -140,6 +146,12 @@ export const zh: Messages = {
 	'settings.fontsFailed': '读取系统字体失败',
 	'settings.fontFamilyHint': '需与已安装字体的名称一致（例如“JetBrains Mono”）；留空使用默认字体。编辑器字体同时用于编译报错信息。',
 	'settings.fontsUnsupported': '当前浏览器不支持读取系统字体，请直接输入字体名称。',
+	'settings.documentFontsAuto': '自动载入文档引用的系统字体',
+	'settings.documentFontsHint': '文档中 #set text(font: "…") 引用的字体，会在该次编译时从本机读入，编译一结束立即释放；与「读取系统字体」使用同一授权。',
+	'settings.systemFontsDisabled': '当前浏览器不支持系统字体。',
+	'settings.systemFontFamilies': '可用系统字体：{count} 个',
+	'settings.systemFontFamilies_one': '可用系统字体：{count} 个',
+	'settings.systemFontFamiliesHint': '点击「读取系统字体」后，这里会列出文档可用的系统字体族名。',
 	'common.close': '关闭',
 
 	// PDF preview
@@ -231,6 +243,12 @@ export const de: Messages = {
 	'settings.fontsFailed': 'Systemschriften konnten nicht gelesen werden',
 	'settings.fontFamilyHint': 'Muss einer installierten Schrift entsprechen (z. B. „JetBrains Mono“). Leer = Standard. Die Editor-Schrift gilt auch für Kompilierfehler.',
 	'settings.fontsUnsupported': 'Dieser Browser kann Systemschriften nicht auflisten — geben Sie den Familiennamen ein.',
+	'settings.documentFontsAuto': 'Installierte Schriften laden, die das Dokument nutzt',
+	'settings.documentFontsHint': 'Eine Familie aus #set text(font: "…") wird für diese Kompilierung von diesem Rechner gelesen und danach sofort freigegeben. Nutzt dieselbe Freigabe wie „Systemschriften laden“.',
+	'settings.systemFontsDisabled': 'Systemschriften sind in diesem Browser nicht verfügbar.',
+	'settings.systemFontFamilies': 'Verfügbare Systemschriften: {count}',
+	'settings.systemFontFamilies_one': 'Verfügbare Systemschrift: {count}',
+	'settings.systemFontFamiliesHint': 'Nach „Systemschriften laden“ werden hier die nutzbaren Familien aufgelistet.',
 	'common.close': 'Schließen',
 
 	// PDF preview

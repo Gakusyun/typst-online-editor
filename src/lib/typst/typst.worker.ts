@@ -20,6 +20,8 @@ type CompileRequest = {
 	files: Record<string, string>; // Map of file path to content
 	mainFile: string; // Which file to compile
 	images?: Record<string, Uint8Array<ArrayBuffer>>;
+	// Fonts read from the machine for this compile only (see compilePdf).
+	systemFonts?: Uint8Array<ArrayBuffer>[];
 };
 
 type CompileResponse =
@@ -58,6 +60,7 @@ let compileQueue: Promise<void> = Promise.resolve();
 let emojiLoaded = false;
 let cjkLoaded = false;
 let lastCompileTime = Date.now();
+let fontsNeedRebuild = false; // set when a dropped compiler's fonts must come back
 const loadedCustomFonts: Set<string> = new Set(); // Track custom font files
 
 // Package registry for Typst Universe packages (mitex, cetz, fletcher, etc.)
@@ -82,9 +85,16 @@ const fetchCdn: typeof fetch = async (input, init) => {
 };
 
 /**
+ * A font for the compiler: a URL (CDN assets), or raw font data (project font
+ * files and the system fonts read for a compile) — `loadFonts` adds bytes
+ * directly, with no base64 detour.
+ */
+type CompilerFont = string | Uint8Array<ArrayBuffer>
+
+/**
  * Creates a compiler with specified fonts
  */
-async function createCompilerWithFonts(fonts: string[]): Promise<TypstCompiler> {
+async function createCompilerWithFonts(fonts: CompilerFont[]): Promise<TypstCompiler> {
 	const compiler = createTypstCompiler();
 	await compiler.init({
 		getModule: async () => (await fetchCdn(TYPST_WASM_URL)).arrayBuffer(),
@@ -135,23 +145,6 @@ function detectCustomFonts(images: Record<string, Uint8Array<ArrayBuffer>>): str
 	);
 }
 
-/**
- * Converts Uint8Array font data to data URL for font loading
- */
-function fontDataToUrl(data: Uint8Array<ArrayBuffer>, filename: string): string {
-	const extension = filename.toLowerCase().split('.').pop();
-	const mimeType = extension === 'ttf' ? 'font/ttf' : 'font/otf';
-	
-	// Convert Uint8Array to base64
-	let binary = '';
-	for (let i = 0; i < data.length; i++) {
-		binary += String.fromCharCode(data[i]);
-	}
-	const base64 = btoa(binary);
-	
-	return `data:${mimeType};base64,${base64}`;
-}
-
 // ============================================================================
 // Compiler Management
 // ============================================================================
@@ -159,30 +152,24 @@ function fontDataToUrl(data: Uint8Array<ArrayBuffer>, filename: string): string 
 /**
  * Upgrades compiler with emoji fonts (lazy loading)
  */
-async function upgradeCompilerWithEmoji(): Promise<void> {
+async function upgradeCompilerWithEmoji(images: Record<string, Uint8Array<ArrayBuffer>>): Promise<void> {
 	if (emojiLoaded) return;
 
 	emojiLoaded = true;
 	console.log('[Typst] Upgrading compiler with emoji fonts...');
-	
-	const newCompiler = await createCompilerWithFonts(getCurrentFonts());
-	compilerPromise = Promise.resolve(newCompiler);
-	
+	await rebuildCompilerWithFonts(images, []);
 	console.log('[Typst] Emoji fonts loaded successfully');
 }
 
 /**
  * Upgrades compiler with CJK fonts (lazy loading)
  */
-async function upgradeCompilerWithCJK(): Promise<void> {
+async function upgradeCompilerWithCJK(images: Record<string, Uint8Array<ArrayBuffer>>): Promise<void> {
 	if (cjkLoaded) return;
 
 	cjkLoaded = true;
 	console.log('[Typst] Upgrading compiler with CJK fonts...');
-	
-	const newCompiler = await createCompilerWithFonts(getCurrentFonts());
-	compilerPromise = Promise.resolve(newCompiler);
-	
+	await rebuildCompilerWithFonts(images, []);
 	console.log('[Typst] CJK fonts loaded successfully');
 }
 
@@ -197,6 +184,7 @@ function getCompiler(): Promise<TypstCompiler> {
 		emojiLoaded = false;
 		cjkLoaded = false;
 		loadedCustomFonts.clear();
+		fontsNeedRebuild = true;
 	}
 
 	if (compilerPromise) return compilerPromise;
@@ -207,33 +195,48 @@ function getCompiler(): Promise<TypstCompiler> {
 }
 
 /**
- * Reinitializes compiler with custom fonts included
+ * Rebuilds the compiler with every font it should carry: the CDN assets, the
+ * project's own font files, and (for one compile) the system fonts read from the
+ * machine. Also re-applies them after the compiler was dropped.
  */
-async function reinitializeWithCustomFonts(
+async function rebuildCompilerWithFonts(
 	images: Record<string, Uint8Array<ArrayBuffer>>,
-	customFontPaths: string[]
+	systemFonts: Uint8Array<ArrayBuffer>[]
 ): Promise<void> {
-	console.log('[Typst] Reinitializing compiler with custom fonts:', customFontPaths);
-	
-	// Convert custom font data to data URLs
-	const customFontUrls = customFontPaths.map(path => 
-		fontDataToUrl(images[path], path)
+	const customFontPaths = detectCustomFonts(images);
+	console.log(
+		'[Typst] Rebuilding compiler with',
+		customFontPaths.length,
+		'project fonts and',
+		systemFonts.length,
+		'system fonts'
 	);
-	
-	// Combine all fonts: core + optional (emoji/cjk) + custom
-	const allFonts = [
+
+	const newCompiler = await createCompilerWithFonts([
 		...getCurrentFonts(),
-		...customFontUrls
-	];
-	
-	// Create new compiler with all fonts
-	const newCompiler = await createCompilerWithFonts(allFonts);
+		...customFontPaths.map((path) => images[path]),
+		...systemFonts
+	]);
 	compilerPromise = Promise.resolve(newCompiler);
-	
+
 	// Track loaded custom fonts
+	loadedCustomFonts.clear();
 	customFontPaths.forEach(path => loadedCustomFonts.add(path));
-	
-	console.log('[Typst] Custom fonts loaded successfully');
+	fontsNeedRebuild = false;
+
+	console.log('[Typst] Fonts loaded successfully');
+}
+
+/**
+ * Drops the compiler that carries fonts read from the machine, so that data is
+ * released together with the compile that needed it. The next compile rebuilds
+ * (with system fonts again only if the source still asks for them).
+ */
+function releaseSystemFonts(): void {
+	compilerPromise = null;
+	loadedCustomFonts.clear();
+	fontsNeedRebuild = true;
+	console.log('[Typst] Released the system fonts read for this compile');
 }
 
 /**
@@ -245,6 +248,7 @@ function resetCompiler(): void {
 	emojiLoaded = false;
 	cjkLoaded = false;
 	loadedCustomFonts.clear();
+	fontsNeedRebuild = true;
 }
 
 // ============================================================================
@@ -287,36 +291,49 @@ function referencedFile(files: Record<string, string>, diagnostic: string): stri
 	return quoted ? quoted[1] : null;
 }
 
+/**
+ * Compiles one job. The system fonts of the document are read from the machine
+ * for this compile only: the compiler carrying them is dropped right after, so
+ * that data never outlives the compilation.
+ */
 async function compilePdf(
 	files: Record<string, string>,
 	mainFile: string,
-	images: Record<string, Uint8Array<ArrayBuffer>> = {}
+	images: Record<string, Uint8Array<ArrayBuffer>> = {},
+	systemFonts: Uint8Array<ArrayBuffer>[] = []
 ): Promise<{ pdf: Uint8Array; diagnostics: string[] }> {
 	// Update last compile time for lifecycle management
 	lastCompileTime = Date.now();
 
-	// Check for custom fonts in uploaded files
-	const customFontPaths = detectCustomFonts(images);
-	const hasNewCustomFonts = customFontPaths.some(path => !loadedCustomFonts.has(path));
-	
-	// If new custom fonts are detected, reinitialize compiler
-	if (hasNewCustomFonts) {
-		await reinitializeWithCustomFonts(images, customFontPaths);
+	// The compiler must carry fonts it does not have yet: new project font files,
+	// the system fonts of this compile, or fonts it lost with a dropped compiler
+	// (idle reset, or the release at the end of a system-font compile).
+	const needsRebuild =
+		fontsNeedRebuild ||
+		systemFonts.length > 0 ||
+		detectCustomFonts(images).some(path => !loadedCustomFonts.has(path));
+	if (needsRebuild) {
+		await rebuildCompilerWithFonts(images, systemFonts);
+	} else {
+		// The lazy font assets change the compiler's font set, so they rebuild too.
+		const allContent = Object.values(files).join('\n');
+		if (needsEmojiFont(allContent)) await upgradeCompilerWithEmoji(images);
+		if (needsCJKFont(allContent)) await upgradeCompilerWithCJK(images);
 	}
 
-	// Check content for special font requirements and upgrade compiler if needed
-	const allContent = Object.values(files).join('\n');
-	
-	// Lazy load emoji fonts (only if no custom fonts were just loaded)
-	if (!hasNewCustomFonts && needsEmojiFont(allContent)) {
-		await upgradeCompilerWithEmoji();
+	try {
+		return await runCompile(files, mainFile, images);
+	} finally {
+		if (systemFonts.length > 0) releaseSystemFonts();
 	}
-	
-	// Lazy load CJK fonts (only if no custom fonts were just loaded)
-	if (!hasNewCustomFonts && needsCJKFont(allContent)) {
-		await upgradeCompilerWithCJK();
-	}
+}
 
+/** Adds the sources to the compiler and compiles the document. */
+async function runCompile(
+	files: Record<string, string>,
+	mainFile: string,
+	images: Record<string, Uint8Array<ArrayBuffer>>
+): Promise<{ pdf: Uint8Array; diagnostics: string[] }> {
 	const compiler = await getCompiler();
 	
 	// Add all source files to the virtual file system
@@ -373,7 +390,12 @@ ctx.onmessage = (event: MessageEvent<CompileRequest>) => {
 
 	compileQueue = compileQueue.then(async () => {
 		try {
-			const { pdf, diagnostics } = await compilePdf(message.files, message.mainFile, message.images);
+			const { pdf, diagnostics } = await compilePdf(
+				message.files,
+				message.mainFile,
+				message.images,
+				message.systemFonts
+			);
 			const pdfCopy = new Uint8Array(pdf.length);
 			pdfCopy.set(pdf);
 			ctx.postMessage(

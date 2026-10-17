@@ -11,7 +11,7 @@ import {
 	writeFontChoice,
 	type FontChoice,
 } from './appearance'
-import { registerSystemFont } from './localFonts'
+import { registerSystemFont } from '@/lib/fonts/localFonts'
 
 interface AppearanceProviderProps {
 	children: ComponentChildren
