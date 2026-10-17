@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks'
+import { useState, useEffect, useRef } from 'preact/hooks'
 import { projectStorage, type Project } from '@/lib/storage/ProjectStorage'
 
 const TEMP_PROJECT: Project = {
@@ -40,15 +40,26 @@ export function useProjectState(onProjectChange?: (files: Record<string, string>
 		return () => clearTimeout(timer)
 	}, [])
 
-	// Notify parent when project changes
+	// Notify parent only when the document content actually changed.
+	// `onProjectChange` may change identity without a content change (e.g. parent
+	// re-renders after a compile), and notifying then would loop recompiles.
+	const lastChangeSignatureRef = useRef<string | null>(null)
+
 	useEffect(() => {
-		if (onProjectChange) {
-			const filesMap = currentProject.files.reduce<Record<string, string>>((acc, file) => {
-				acc[file.path] = file.content
-				return acc
-			}, {})
-			onProjectChange(filesMap, currentProject.mainFile)
+		if (!onProjectChange) return
+
+		const filesMap: Record<string, string> = {}
+		let signature = ''
+		for (const file of currentProject.files) {
+			filesMap[file.path] = file.content
+			signature += `${file.path}\u0000${file.content}\u0000`
 		}
+		signature += `main\u0000${currentProject.mainFile}`
+
+		if (signature === lastChangeSignatureRef.current) return
+		lastChangeSignatureRef.current = signature
+
+		onProjectChange(filesMap, currentProject.mainFile)
 	}, [currentProject, onProjectChange])
 
 	const loadProject = (project: Project) => {

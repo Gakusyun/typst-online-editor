@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'preact/hooks'
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks'
 import { TypstCompilerService, type CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { debounce } from '@/lib/utils/helpers'
 
@@ -47,17 +47,19 @@ export function useTypstCompiler() {
 		}
 	}, [])
 
-	const compileNow = async (files: Record<string, string>, mainFile: string) => {
+	// Stable identities: callers (useProjectState) re-run change effects on
+	// callback identity changes, which would otherwise trigger endless recompiles.
+	const compileNow = useCallback(async (files: Record<string, string>, mainFile: string) => {
 		if (compilerServiceRef.current) {
 			await compilerServiceRef.current.compile(files, mainFile)
 		}
-	}
+	}, [])
 
-	const compileDebounced = (files: Record<string, string>, mainFile: string) => {
+	const compileDebounced = useCallback((files: Record<string, string>, mainFile: string) => {
 		if (debouncedCompileRef.current) {
 			debouncedCompileRef.current(files, mainFile)
 		}
-	}
+	}, [])
 
 	return {
 		status,
