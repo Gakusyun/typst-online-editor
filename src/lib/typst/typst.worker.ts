@@ -8,6 +8,7 @@ import {
 	MemoryAccessModel
 } from '@myriaddreamin/typst.ts';
 import { withPackageRegistry, withAccessModel } from '@myriaddreamin/typst.ts/options.init';
+import { CORE_FONTS, EMOJI_FONTS, CJK_FONTS } from './fonts';
 
 // ============================================================================
 // Type Definitions
@@ -41,61 +42,10 @@ type CompileResponse =
 // Configuration
 // ============================================================================
 
-// All compiler assets (wasm + fonts) load from CDN mirrors — nothing is
-// self-hosted in public/, so compiling needs network access. Keep the pinned
-// versions in sync with the installed @myriaddreamin/* packages.
+// The compiler wasm loads from a CDN mirror — nothing is self-hosted in public/,
+// so compiling needs network access. Keep the pinned version in sync with the
+// installed @myriaddreamin/* packages. Fonts: see ./fonts.
 const TYPST_WASM_URL = 'https://cdn.jsdmirror.com/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm';
-
-// Font CDN bases (pinned; bump together with the wasm pin above).
-const FONT_CDN_BASE = {
-	// Typst's default text font set + math fonts
-	typstAssets: 'https://cdn.jsdmirror.com/gh/typst/typst-assets@v0.13.1/files/fonts/',
-	// IBM Plex Sans (UI fonts)
-	typstDevAssets: 'https://cdn.jsdmirror.com/gh/typst/typst-dev-assets@v0.13.1/files/fonts/',
-	// CJK fonts (loaded on demand)
-	notoCJK: 'https://cdn.jsdmirror.com/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/',
-	// Color emoji (loaded on demand)
-	notoEmoji: 'https://cdn.jsdmirror.com/gh/googlefonts/noto-emoji@v2.047/fonts/'
-} as const;
-
-
-const CORE_FONTS: string[] = [
-	// IBM Plex Sans (modern UI fonts)
-	FONT_CDN_BASE.typstDevAssets + 'IBMPlexSans-Regular.ttf',
-	FONT_CDN_BASE.typstDevAssets + 'IBMPlexSans-Bold.ttf',
-	// Math fonts (critical for mathematical formulas)
-	FONT_CDN_BASE.typstAssets + 'NewCMMath-Regular.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCMMath-Book.otf',
-	// Typst's default text font set (serif body, mono, NewCM10). Listed explicitly
-	// because `assets: false` disables typst.ts' built-in font asset loader.
-	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono.ttf',
-	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-Bold.ttf',
-	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-Oblique.ttf',
-	FONT_CDN_BASE.typstAssets + 'DejaVuSansMono-BoldOblique.ttf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Regular.otf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Bold.otf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Italic.otf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-BoldItalic.otf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-Semibold.otf',
-	FONT_CDN_BASE.typstAssets + 'LibertinusSerif-SemiboldItalic.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCM10-Regular.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCM10-Bold.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCM10-Italic.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCM10-BoldItalic.otf',
-	FONT_CDN_BASE.typstAssets + 'NewCMMath-Bold.otf'
-];
-
-const EMOJI_FONTS: string[] = [
-	// Emoji support (Noto Color Emoji ~9 MB) — loaded on demand
-	FONT_CDN_BASE.notoEmoji + 'NotoColorEmoji.ttf'
-];
-
-const CJK_FONTS: string[] = [
-	// CJK (Chinese/Japanese/Korean) fonts — loaded on demand
-	// Note: these are large files (~15-20 MB each)
-	FONT_CDN_BASE.notoCJK + 'NotoSansCJKsc-Regular.otf',
-	FONT_CDN_BASE.notoCJK + 'NotoSansCJKsc-Bold.otf'
-];
 
 // ============================================================================
 // State Management

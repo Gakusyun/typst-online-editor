@@ -67,6 +67,9 @@ export default function TypstEditor() {
 		handleFileRename,
 		handleFileMove,
 		handleFileDelete,
+		renameProject,
+		handleProjectImport,
+		handleProjectExport,
 	} = useProjectManagement(handleProjectChange)
 	
 	// Sidebar resize (left panel)
@@ -149,6 +152,9 @@ export default function TypstEditor() {
 								onFileDelete={handleFileDelete}
 								onFileRename={handleFileRename}
 								onFileMove={handleFileMove}
+								onRenameProject={renameProject}
+								onImportProject={handleProjectImport}
+								onExportProject={handleProjectExport}
 								isCollapsed={isSidebarCollapsed}
 								onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
 							/>
@@ -203,6 +209,9 @@ export default function TypstEditor() {
 							onFileDelete={handleFileDelete}
 							onFileRename={handleFileRename}
 							onFileMove={handleFileMove}
+							onRenameProject={renameProject}
+							onImportProject={handleProjectImport}
+							onExportProject={handleProjectExport}
 							isCollapsed={isSidebarCollapsed}
 							onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
 						/>

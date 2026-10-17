@@ -73,11 +73,16 @@ export function useProjectState(onProjectChange?: (files: Record<string, string>
 		projectStorage.save(project)
 	}
 
+	const renameProject = (name: string) => {
+		saveProject({ ...currentProject, name })
+	}
+
 	return {
 		currentProject,
 		activeFilePath,
 		setActiveFilePath,
 		loadProject,
 		saveProject,
+		renameProject,
 	}
 }

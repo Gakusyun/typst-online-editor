@@ -30,6 +30,8 @@ export const en = {
 	'settings.followSystem': 'Follow system',
 	'settings.about': 'About',
 	'settings.version': 'Version {version}',
+	'settings.fontFamilies': 'View supported font families',
+	'settings.fontFamiliesHint': 'Reference them in documents with #set text(font: "..."). Uploaded fonts are also available under their own family names.',
 	'common.close': 'Close',
 
 	// PDF preview
@@ -70,12 +72,17 @@ export const en = {
 	'files.deleteFolder': 'Delete folder',
 	'files.dropToUpload': 'Drop files to upload',
 	'files.supported': 'Supported: {extensions}',
+	'files.renameProject': 'Rename project',
+	'files.importProject': 'Import Project',
+	'files.exportProject': 'Export Project',
 
 	// Modal dialogs (alert / confirm)
 	'dialog.fileExists': 'A file with this name already exists!',
 	'dialog.folderExists': 'A folder with this name already exists!',
 	'dialog.fileExistsAtDestination': 'A file with this name already exists at the destination!',
 	'dialog.overwriteFile': 'File "{name}" already exists. Do you want to overwrite it?',
+	'dialog.importFailed': 'Failed to import project: {error}',
+	'dialog.exportFailed': 'Failed to export project: {error}',
 
 	// Layout
 	'layout.dragToResize': 'Drag to resize',
@@ -106,6 +113,8 @@ export const zh: Messages = {
 	'settings.followSystem': '跟随系统',
 	'settings.about': '关于',
 	'settings.version': '版本 {version}',
+	'settings.fontFamilies': '查看支持的 Font Family',
+	'settings.fontFamiliesHint': '在文档中通过 #set text(font: "…") 引用这些字体；上传的字体同样可用，其族名定义在字体文件内部。',
 	'common.close': '关闭',
 
 	// PDF preview
@@ -146,12 +155,17 @@ export const zh: Messages = {
 	'files.deleteFolder': '删除文件夹',
 	'files.dropToUpload': '拖放文件以上传',
 	'files.supported': '支持：{extensions}',
+	'files.renameProject': '重命名项目',
+	'files.importProject': '导入项目',
+	'files.exportProject': '导出项目',
 
 	// Modal dialogs
 	'dialog.fileExists': '同名文件已存在！',
 	'dialog.folderExists': '同名文件夹已存在！',
 	'dialog.fileExistsAtDestination': '目标位置已存在同名文件！',
 	'dialog.overwriteFile': '文件“{name}”已存在，要覆盖它吗？',
+	'dialog.importFailed': '导入项目失败：{error}',
+	'dialog.exportFailed': '导出项目失败：{error}',
 
 	// Layout
 	'layout.dragToResize': '拖动调整大小',
@@ -177,6 +191,8 @@ export const de: Messages = {
 	'settings.followSystem': 'Systemsprache',
 	'settings.about': 'Über',
 	'settings.version': 'Version {version}',
+	'settings.fontFamilies': 'Unterstützte Schriftfamilien anzeigen',
+	'settings.fontFamiliesHint': 'Referenzieren Sie sie in Dokumenten mit #set text(font: "…"). Hochgeladene Schriften stehen unter ihrem eigenen Familiennamen zur Verfügung.',
 	'common.close': 'Schließen',
 
 	// PDF preview
@@ -217,12 +233,17 @@ export const de: Messages = {
 	'files.deleteFolder': 'Ordner löschen',
 	'files.dropToUpload': 'Dateien zum Hochladen ablegen',
 	'files.supported': 'Unterstützt: {extensions}',
+	'files.renameProject': 'Projekt umbenennen',
+	'files.importProject': 'Projekt importieren',
+	'files.exportProject': 'Projekt exportieren',
 
 	// Modal dialogs
 	'dialog.fileExists': 'Eine Datei mit diesem Namen existiert bereits!',
 	'dialog.folderExists': 'Ein Ordner mit diesem Namen existiert bereits!',
 	'dialog.fileExistsAtDestination': 'Am Ziel existiert bereits eine Datei mit diesem Namen!',
 	'dialog.overwriteFile': 'Die Datei „{name}“ existiert bereits. Überschreiben?',
+	'dialog.importFailed': 'Projektimport fehlgeschlagen: {error}',
+	'dialog.exportFailed': 'Projektexport fehlgeschlagen: {error}',
 
 	// Layout
 	'layout.dragToResize': 'Zum Ändern der Größe ziehen',

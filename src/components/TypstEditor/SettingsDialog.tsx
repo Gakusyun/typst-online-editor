@@ -1,5 +1,6 @@
-import { useEffect } from 'preact/hooks'
-import { X } from 'lucide-preact'
+import { useEffect, useState } from 'preact/hooks'
+import { X, Type, ChevronUp, ChevronDown } from 'lucide-preact'
+import { SUPPORTED_FONT_FAMILIES } from '@/lib/typst/fonts'
 import { version } from '../../../package.json'
 import { LANGS, LANG_LABELS, type LangSetting } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
@@ -10,6 +11,7 @@ interface SettingsDialogProps {
 
 export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
+	const [showFontFamilies, setShowFontFamilies] = useState(false)
 
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -56,6 +58,32 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 							</option>
 						))}
 					</select>
+
+					<div className="mt-5 pt-4 border-t border-gray-700">
+						<button
+							onClick={() => setShowFontFamilies((show) => !show)}
+							className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+							title={t('settings.fontFamilies')}
+						>
+							<span className="flex items-center gap-2">
+								<Type className="w-4 h-4" />
+								{t('settings.fontFamilies')}
+							</span>
+							{showFontFamilies ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+						</button>
+						{showFontFamilies && (
+							<div className="mt-2 rounded border border-gray-700 bg-gray-900/50 px-3 py-2">
+								<ul className="space-y-1">
+									{SUPPORTED_FONT_FAMILIES.map((family) => (
+										<li key={family} className="text-sm font-mono text-gray-200">
+											{family}
+										</li>
+									))}
+								</ul>
+								<p className="mt-2 text-xs text-gray-400">{t('settings.fontFamiliesHint')}</p>
+							</div>
+						)}
+					</div>
 
 					<div className="mt-5 pt-4 border-t border-gray-700">
 						<h3 className="text-sm font-semibold text-gray-300">{t('settings.about')}</h3>

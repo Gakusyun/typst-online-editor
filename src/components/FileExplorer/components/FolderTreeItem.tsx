@@ -1,5 +1,6 @@
 import type { ComponentChildren, TargetedDragEvent } from 'preact'
-import { Folder, ChevronRight, ChevronDown, Edit2, Trash2, Check, X } from 'lucide-preact'
+import { Folder, ChevronRight, ChevronDown, Edit2, Trash2 } from 'lucide-preact'
+import RenameInput from './RenameInput'
 import { useI18n } from '@/lib/i18n/useI18n'
 import type { FileNode } from '../types'
 
@@ -53,23 +54,7 @@ export default function FolderTreeItem({
 				<div className="px-4 py-2 bg-gray-800" style={{ paddingLeft: `${depth * 12 + 16}px` }}>
 					<div className="flex items-center gap-2">
 						<Folder className="w-4 h-4 text-blue-400 shrink-0" />
-						<input
-							type="text"
-							value={renameValue}
-							onInput={(e) => onRenameChange(e.currentTarget.value)}
-							onKeyDown={(e) => {
-								if (e.key === 'Enter') onRename()
-								if (e.key === 'Escape') onCancelRename()
-							}}
-							className="flex-1 px-2 py-1 text-sm bg-gray-700 text-gray-100 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-							autoFocus
-						/>
-						<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.rename')}>
-							<Check className="w-3 h-3 text-green-400" />
-						</button>
-						<button onClick={onCancelRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.cancel')}>
-							<X className="w-3 h-3 text-red-400" />
-						</button>
+						<RenameInput value={renameValue} onChange={onRenameChange} onRename={onRename} onCancel={onCancelRename} />
 					</div>
 				</div>
 				{children}

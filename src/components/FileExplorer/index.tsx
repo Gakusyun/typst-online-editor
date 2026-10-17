@@ -27,6 +27,9 @@ export default function FileExplorer({
 	onFileDelete,
 	onFileRename,
 	onFileMove,
+	onRenameProject,
+	onImportProject,
+	onExportProject,
 	isCollapsed = false,
 	onToggleCollapse,
 }: FileExplorerProps) {
@@ -271,7 +274,7 @@ export default function FileExplorer({
 
 	return (
 		<div className="relative h-full flex flex-col w-full bg-gray-900 border-r border-gray-700">
-			<FileExplorerHeader project={project} onToggleCollapse={onToggleCollapse || (() => {})} />
+			<FileExplorerHeader project={project} onRenameProject={onRenameProject} onToggleCollapse={onToggleCollapse || (() => {})} />
 
 			{/* Files List */}
 			<div 
@@ -330,6 +333,8 @@ export default function FileExplorer({
 					if (parentPath) expandFolder(parentPath)
 					setCreatingItem({ type: 'folder', parentPath })
 				}}
+				onImportProject={onImportProject}
+				onExportProject={onExportProject}
 			/>
 		</div>
 	)

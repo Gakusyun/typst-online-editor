@@ -15,6 +15,9 @@ export interface FileExplorerProps {
 	onFileDelete: (path: string) => void
 	onFileRename: (oldPath: string, newPath: string) => void
 	onFileMove: (oldPath: string, newPath: string) => void
+	onRenameProject: (name: string) => void
+	onImportProject: (file: File) => void
+	onExportProject: () => void
 	isCollapsed?: boolean
 	onToggleCollapse?: () => void
 }

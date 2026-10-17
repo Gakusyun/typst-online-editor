@@ -28,7 +28,7 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 |`index.html`, `src/main.tsx`|Vite entry: `index.html` mounts `#app`, `main.tsx` imports global CSS and renders `I18nProvider` > `TypstEditor`|
 |`src/styles/`|`globals.css` (Tailwind import + Shiki wrap override) and the pdf.js `textlayer`/`annotationlayer` CSS|
 |`src/components/`|`TypstEditor/` (orchestrator + header + `SettingsDialog` + hooks), `CodeEditor/` (Shiki + textarea), `FileExplorer/` (virtual folder tree), `PDFViewer/` (canvas preview)|
-|`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM)|
+|`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM), `fonts.ts` (CDN font config + `SUPPORTED_FONT_FAMILIES` manifest)|
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
 |`src/lib/i18n/`|UI strings + `I18n` contract: `messages.ts` (zh/en/de catalogs), `i18n.ts` (`Lang`, `I18n`, `translate`), `useI18n.ts`, `I18nProvider.tsx`|
@@ -58,7 +58,7 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - **Styling** — Tailwind v4 utilities in JSX (CSS-first config: `@import "tailwindcss"`, **no** `tailwind.config.*`; Tailwind runs through the `@tailwindcss/vite` plugin, no PostCSS config). Inline `style` only for dynamic sizing; `src/styles/globals.css` holds the Shiki `pre-wrap` override. Icons: `lucide-preact`.
 - **Typing** — `strict: true`; typed arrays as `Uint8Array<ArrayBuffer>` (TS ≥ 5.7 feature); `as unknown as` casts allowed where `pdfjs-dist`/worker typings are wrong — keep the explanatory comments. TypeScript 7 has **no JS compiler API**, which is why the lint toolchain is oxlint, not typescript-eslint.
 
-**Recipe — add fonts:** add the CDN URL (base in `FONT_CDN_BASE`) to `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `typst.worker.ts` — fonts are CDN-only, nothing is self-hosted in `public/`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
+**Recipe — add fonts:** add the CDN URL (base in `FONT_CDN_BASE`) to `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `src/lib/typst/fonts.ts`, and the family name to `SUPPORTED_FONT_FAMILIES` (shown in the Settings dialog) — fonts are CDN-only, nothing is self-hosted in `public/`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
 
 **Recipe — add a language:** add a catalog to `src/lib/i18n/messages.ts` (typed against the `en` base — a missing key fails `tsc`), then register the code in `LANGS` and its endonym in `LANG_LABELS` (`src/lib/i18n/i18n.ts`). New UI strings go in `messages.ts` only; components read them via `useI18n().t`, never as JSX literals.
 
@@ -89,7 +89,7 @@ pnpm exec tsc --noEmit
 pnpm build   # runs tsc --noEmit + vite build
 ```
 
-`pnpm lint` runs **oxlint** with zero config (`oxlint src`; ESLint/typescript-eslint are gone — TS 7 ships no compiler API for them to parse with). Expect three pre-existing `no-unused-vars` warnings (`useProjectManagement.ts`, `CodeEditor.tsx`'s `isDatFile`, `resetCompiler` in the worker) — they predate the Preact migration.
+`pnpm lint` runs **oxlint** with zero config (`oxlint src`; ESLint/typescript-eslint are gone — TS 7 ships no compiler API for them to parse with). Expect two pre-existing `no-unused-vars` warnings (`CodeEditor.tsx`'s `isDatFile`, `resetCompiler` in the worker) — they predate the Preact migration.
 
 If tests are ever added, the hard-to-test surfaces are: the worker + WASM boundary (`typstClient.ts` uses `new Worker(new URL('./typst.worker.ts', import.meta.url), {type: 'module'})`), localStorage with SSR guards (`ProjectStorage.ts`), and canvas rendering (`usePdfRenderer.ts`). Easiest pure-logic units: `src/components/FileExplorer/utils/buildFileTree.ts`, `src/lib/utils/helpers.ts`. Prefer a throwaway smoke script over wiring tests.
 
