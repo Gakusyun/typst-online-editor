@@ -23,6 +23,9 @@ export const LANGS = ['zh', 'en', 'de'] as const
 
 export type Lang = (typeof LANGS)[number]
 
+/** A language choice: a concrete language, or `system` to follow the browser. */
+export type LangSetting = 'system' | Lang
+
 /**
  * Endonyms (a language's name in that language) for the switcher — deliberately
  * not translated: a user who cannot read the current UI must still recognize
@@ -38,8 +41,11 @@ export const LANG_LABELS: Record<Lang, string> = {
 export type MessageVars = Record<string, string | number>
 
 export interface I18n {
-	/** Active UI language. */
+	/** Effective UI language messages render in — `langSetting` resolved to a language. */
 	readonly lang: Lang
+
+	/** The language choice made in Settings. */
+	readonly langSetting: LangSetting
 
 	/**
 	 * Localized message for `key`, with `{placeholder}` slots filled from `vars`.
@@ -50,8 +56,8 @@ export interface I18n {
 	 */
 	t(key: MessageKey, vars?: MessageVars): string
 
-	/** Switch the UI language. Persisted and reflected in `<html lang>`. */
-	setLang(lang: Lang): void
+	/** Choose the language. Persisted; `system` follows the browser language. */
+	setLangSetting(setting: LangSetting): void
 }
 
 const PLURAL_RULES: Record<Lang, Intl.PluralRules> = {

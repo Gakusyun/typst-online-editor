@@ -1,8 +1,7 @@
 
 import type { ComponentChildren } from 'preact'
-import { Globe, Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
+import { Settings, Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
-import { LANGS, LANG_LABELS, type Lang } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
 
 // lucide 1.x dropped brand icons, so the GitHub mark is inlined here (Simple Icons, CC0).
@@ -22,6 +21,7 @@ interface TypstEditorHeaderProps {
 	isMobile: boolean
 	onCompileNow: () => void
 	onDownload: () => void
+	onOpenSettings: () => void
 }
 
 export default function TypstEditorHeader({
@@ -31,8 +31,9 @@ export default function TypstEditorHeader({
 	isMobile,
 	onCompileNow,
 	onDownload,
+	onOpenSettings,
 }: TypstEditorHeaderProps) {
-	const { t, lang, setLang } = useI18n()
+	const { t } = useI18n()
 	const getStatusText = (): ComponentChildren => {
 		const textSizeClass = isMobile ? 'text-xs' : ''
 		switch (status) {
@@ -81,7 +82,7 @@ export default function TypstEditorHeader({
 					<h1 className="text-xl font-semibold">Typst Online Editor</h1>
 					{isMobile && (
 						<a
-							href="https://github.com/Mapaor/typst-online-editor"
+							href="https://github.com/Gakusyun/typst-online-editor"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
@@ -93,7 +94,7 @@ export default function TypstEditorHeader({
 				</div>
 					{!isMobile && (
 						<a
-							href="https://github.com/Mapaor/typst-online-editor"
+							href="https://github.com/Gakusyun/typst-online-editor"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
@@ -124,21 +125,13 @@ export default function TypstEditorHeader({
 						{t('header.downloadPdf')}
 					</button>
 				)}
-				<label className="flex items-center gap-1 text-gray-300" title={t('header.language')}>
-					<Globe className="w-4 h-4 shrink-0" />
-					<span className="sr-only">{t('header.language')}</span>
-					<select
-						value={lang}
-						onChange={(e) => setLang(e.currentTarget.value as Lang)}
-						className="bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-					>
-						{LANGS.map((code) => (
-							<option key={code} value={code}>
-								{LANG_LABELS[code]}
-							</option>
-						))}
-					</select>
-				</label>
+				<button
+					onClick={onOpenSettings}
+					className="p-2 text-white rounded hover:bg-gray-600 transition-colors"
+					title={t('settings.title')}
+				>
+					<Settings className="w-5 h-5" />
+				</button>
 			</div>
 		</div>
 	)

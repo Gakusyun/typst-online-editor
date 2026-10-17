@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
 import FileExplorer from '../FileExplorer'
 import TypstEditorHeader from './TypstEditorHeader'
+import SettingsDialog from './SettingsDialog'
 import CodeEditor from '../CodeEditor'
 import PdfPreview from '../PDFViewer'
 import ResizeHandle from './ResizeHandle'
@@ -25,6 +26,7 @@ export default function TypstEditor() {
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 	const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
+	const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 	
 	// Mobile detection
 	useEffect(() => {
@@ -118,7 +120,10 @@ export default function TypstEditor() {
 				isMobile={isMobile}
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
+				onOpenSettings={() => setIsSettingsOpen(true)}
 			/>
+
+			{isSettingsOpen && <SettingsDialog onClose={() => setIsSettingsOpen(false)} />}
 
 			{isMobile ? (
 				/* Mobile Layout: Sidebar + Editor on top, Preview below */

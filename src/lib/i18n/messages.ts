@@ -23,7 +23,14 @@ export const en = {
 	'header.compileNow': 'Compile Now',
 	'header.downloadPdf': 'Download PDF',
 	'header.viewOnGithub': 'View on GitHub',
-	'header.language': 'Language',
+
+	// Settings dialog
+	'settings.title': 'Settings',
+	'settings.language': 'Language',
+	'settings.followSystem': 'Follow system',
+	'settings.about': 'About',
+	'settings.version': 'Version {version}',
+	'common.close': 'Close',
 
 	// PDF preview
 	'preview.title': 'PDF Preview',
@@ -92,7 +99,14 @@ export const zh: Messages = {
 	'header.compileNow': '立即编译',
 	'header.downloadPdf': '下载 PDF',
 	'header.viewOnGithub': '在 GitHub 上查看',
-	'header.language': '语言',
+
+	// Settings dialog
+	'settings.title': '设置',
+	'settings.language': '语言',
+	'settings.followSystem': '跟随系统',
+	'settings.about': '关于',
+	'settings.version': '版本 {version}',
+	'common.close': '关闭',
 
 	// PDF preview
 	'preview.title': 'PDF 预览',
@@ -156,7 +170,14 @@ export const de: Messages = {
 	'header.compileNow': 'Jetzt kompilieren',
 	'header.downloadPdf': 'PDF herunterladen',
 	'header.viewOnGithub': 'Auf GitHub ansehen',
-	'header.language': 'Sprache',
+
+	// Settings dialog
+	'settings.title': 'Einstellungen',
+	'settings.language': 'Sprache',
+	'settings.followSystem': 'Systemsprache',
+	'settings.about': 'Über',
+	'settings.version': 'Version {version}',
+	'common.close': 'Schließen',
 
 	// PDF preview
 	'preview.title': 'PDF-Vorschau',

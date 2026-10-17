@@ -67,10 +67,10 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 ## 界面语言（i18n）
 
-界面文案已国际化，首批支持简体中文、英语、德语。右上角地球图标旁的下拉框可切换语言，选择记入 `localStorage`（键 `typst-lang`），首次进入默认跟随浏览器语言。
+界面文案已国际化，首批支持简体中文、英语、德语。语言在「设置」弹窗（右上角齿轮）中切换，可选「跟随系统」或指定语言，选择记入 `localStorage`（键 `typst-lang`），默认「跟随系统」。弹窗的「关于」一节显示版本号（取自 `package.json` 的 `version`）。
 
 - 消息目录在 `src/lib/i18n/messages.ts`：`en` 为基础目录，它的键即 `MessageKey`，其它语言的目录类型为 `Messages`，缺少或拼错任何键都会让 `tsc` 失败。
-- 接口在 `src/lib/i18n/i18n.ts`（`I18n`：`lang` / `t()` / `setLang()`）。`t('files.count', { count })` 会填充 `{placeholder}` 占位符；当 `vars.count` 是数字时，按 `Intl.PluralRules` 选取 `<key>_<plural category>` 变体（如 `files.count_one`），该语言没有变体则回落到基础键。
+- 接口在 `src/lib/i18n/i18n.ts`（`I18n`：`lang` / `langSetting` / `t()` / `setLangSetting()`）。`t('files.count', { count })` 会填充 `{placeholder}` 占位符；当 `vars.count` 是数字时，按 `Intl.PluralRules` 选取 `<key>_<plural category>` 变体（如 `files.count_one`），该语言没有变体则回落到基础键。
 - 组件里用 `useI18n()` 取用，必须位于 `I18nProvider` 之下（`src/main.tsx` 已挂载）。
 
 新增语言的步骤：
