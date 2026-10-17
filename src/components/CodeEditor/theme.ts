@@ -20,7 +20,7 @@ export const editorTheme = EditorView.theme({
 	},
 	'.cm-content': {
 		caretColor: '#ffffff',
-		padding: '0 1rem',
+		padding: '0 12px 0 6px',
 	},
 	'.cm-cursor, .cm-dropCursor': {
 		borderLeftColor: '#ffffff',
@@ -35,6 +35,14 @@ export const editorTheme = EditorView.theme({
 		backgroundColor: 'transparent',
 		color: '#6e7681',
 		border: 'none',
+		padding: '0',
+	},
+	'.cm-lineNumbers .cm-gutterElement': {
+		padding: '0 2px 0 6px',
+	},
+	'.cm-foldGutter .cm-gutterElement': {
+		width: '12px',
+		padding: '0 1px',
 	},
 	'.cm-activeLineGutter': {
 		backgroundColor: 'transparent',

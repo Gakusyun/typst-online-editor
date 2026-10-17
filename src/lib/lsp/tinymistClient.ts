@@ -35,7 +35,8 @@ export class TinymistLspClient {
 			}
 		}
 		this.#worker.onerror = (e) => {
-			this.#setStatus('error', e.message)
+			console.error('[tinymist] language server worker failed:', e.message || e)
+			this.#setStatus('error', e.message || String(e))
 		}
 		this.#transport = {
 			send: (message: string) => {
@@ -70,6 +71,11 @@ export class TinymistLspClient {
 		}
 	}
 
+	/** Project file paths (any type) — used to suppress missing-file false positives. */
+	setProjectFiles(paths: string[]): void {
+		this.#worker.postMessage({ type: 'files', paths })
+	}
+
 	dispose(): void {
 		this.#worker.terminate()
 		this.#messageHandlers.clear()
@@ -79,6 +85,9 @@ export class TinymistLspClient {
 	#setStatus(status: TinymistLspStatus, detail?: string): void {
 		this.#status = status
 		this.#statusDetail = detail
+		if (status === 'error') {
+			console.error('[tinymist] language server unavailable:', detail ?? 'unknown error')
+		}
 		for (const handler of this.#statusHandlers) handler(status, detail)
 	}
 }

@@ -54,11 +54,11 @@ const FONT_FILES = ['ttf', 'otf', 'woff', 'woff2']
 
 function baseExtensions(placeholderText: string): Extension[] {
 	return [
+		foldGutter(),
 		lineNumbers(),
 		highlightActiveLineGutter(),
 		highlightSpecialChars(),
 		history(),
-		foldGutter(),
 		drawSelection(),
 		dropCursor(),
 		EditorState.allowMultipleSelections.of(true),
@@ -124,6 +124,7 @@ export default function CodeEditor({
 	const onChangeRef = useRef(onChange)
 	const onFileSelectRef = useRef(onFileSelect)
 	const [lspStatus, setLspStatus] = useState<TinymistLspStatus>('loading')
+	const [lspStatusDetail, setLspStatusDetail] = useState<string | undefined>()
 
 	projectRef.current = project
 	onChangeRef.current = onChange
@@ -158,7 +159,10 @@ export default function CodeEditor({
 		})
 		workspaceRef.current?.applyProject(projectRef.current.files)
 		client.connect(tinymist.transport)
-		const unsubscribe = tinymist.onStatus((status) => setLspStatus(status))
+		const unsubscribe = tinymist.onStatus((status, detail) => {
+			setLspStatus(status)
+			setLspStatusDetail(detail)
+		})
 		lspRef.current = tinymist
 		lspClientRef.current = client
 		return () => {
@@ -173,6 +177,10 @@ export default function CodeEditor({
 
 	useEffect(() => {
 		workspaceRef.current?.applyProject(project.files)
+		lspRef.current?.setProjectFiles(project.files.map((file) => file.path))
+		// Push project-driven content changes (storage load, import, undo) that
+		// no editor view has synchronized yet.
+		lspClientRef.current?.sync()
 	}, [project])
 
 	useEffect(() => {
@@ -226,7 +234,11 @@ export default function CodeEditor({
 		<div className="flex flex-col h-full border-r border-gray-700">
 			<div className="px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm text-gray-400 flex items-center justify-between gap-3">
 				<span className="truncate">{activeFilePath}</span>
-				{lspStatusText && <span className="shrink-0 text-xs">{lspStatusText}</span>}
+				{lspStatusText && (
+					<span className="shrink-0 text-xs" title={lspStatusDetail}>
+						{lspStatusText}
+					</span>
+				)}
 			</div>
 
 			<div className="flex-1 overflow-hidden">

@@ -53,6 +53,11 @@ export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCo
 			
 			{!isCollapsed && (
 				<>
+					{errorMsg && pdfUrl && (
+						<div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-xs text-red-300 overflow-auto" style={{ maxHeight: '6rem' }}>
+							<pre className="m-0 font-mono whitespace-pre-wrap break-words">{errorMsg}</pre>
+						</div>
+					)}
 					{pdfUrl ? (
 						<PdfCanvas
 							canvasRefs={canvasRefs}

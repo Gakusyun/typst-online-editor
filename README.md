@@ -16,7 +16,8 @@
 - 借助 Typst.ts 实现全客户端编译（wasm 与编译字体随 [@myriaddreamin/typst-ts-web-compiler](https://www.npmjs.com/package/@myriaddreamin/typst-ts-web-compiler) 等包发布，运行时从 CDN 加载，`public/` 不再存放副本，编译需要联网）。
 - CodeMirror 6 编辑器，语法高亮来自 `codemirror-lang-typst`（Lezer，无 WASM）；Tinymist WASM 语言服务（后台 Web Worker 运行，运行时从 CDN 加载）提供诊断、补全、悬停、定义跳转、重命名、格式化等能力，支持跨文件 `#import` 分析与 Typst Universe 包。
 - 已知限制：Tinymist 语言服务的分析环境无法加载字体（wasm 构建内嵌了正文字体但没有数学字体），因此含公式的文档会报一条误报 “no font could be found”，编辑器会将其过滤；PDF 编译管线使用真实字体，不受影响。
-- 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
+- 已知限制：语言服务首次使用需从 CDN 下载约 12.8 MB 的 wasm；若下载失败，右上角显示「语言服务不可用」且不会自动重试——刷新页面即可恢复。语言服务与编译彼此独立，前者不可用时仍能正常编译并预览 PDF。
+- 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。编译失败时保留上一次成功的 PDF 并提示错误，只有新产物编译成功才会替换旧产物。
 - 项目名可在侧栏直接修改；项目可导出为 zip（以项目名命名）、从 zip 导入；设置中可查看支持的 font family。
 - 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。

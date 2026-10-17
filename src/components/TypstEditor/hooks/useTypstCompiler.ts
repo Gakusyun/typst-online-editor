@@ -27,8 +27,9 @@ export function useTypstCompiler() {
 				setHasCompiled(true)
 			},
 			onError: (error) => {
+				// Keep the last successful PDF on screen: the artifact is only
+				// replaced when a new compilation succeeds.
 				setErrorMsg(error)
-				setPdfUrl(null)
 				setHasCompiled(true)
 			},
 		})

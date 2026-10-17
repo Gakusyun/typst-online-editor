@@ -14,7 +14,7 @@ export interface ProjectWorkspaceHost {
 	onNavigate(path: string): void
 }
 
-const TYPST_FILE = /\.typ$/i
+const TEXT_FILE = /\.(typ|md|mdx|bib|txt|csv|json|ya?ml|toml)$/i
 
 export function pathToUri(path: string): string {
 	const encoded = path
@@ -75,14 +75,16 @@ export class ProjectWorkspace extends Workspace {
 	/** Add/remove project files on the server. Call on project changes. */
 	applyProject(files: readonly ProjectFileSnapshot[]): void {
 		const seen = new Set<string>()
+		let changed = false
 		for (const snapshot of files) {
-			if (!TYPST_FILE.test(snapshot.path)) continue
+			if (!TEXT_FILE.test(snapshot.path)) continue
 			const uri = pathToUri(snapshot.path)
 			seen.add(uri)
 			if (this.#files.has(uri)) continue
 			const file = this.#makeFile(uri, 'typst', Text.of(snapshot.content.split('\n')))
 			this.#files.set(uri, file)
 			if (this.#connected) this.client.didOpen(file)
+			changed = true
 		}
 		for (const uri of this.#files.keys()) {
 			if (seen.has(uri)) continue
@@ -90,6 +92,13 @@ export class ProjectWorkspace extends Workspace {
 			this.#views.delete(uri)
 			this.#versions.delete(uri)
 			if (this.#connected) this.client.didClose(uri)
+			changed = true
+		}
+		// Opening another file moves the server's focus, and the analysis only
+		// publishes diagnostics for the focused document — hand it back to the
+		// document the user is editing.
+		if (changed) {
+			for (const uri of this.#views.keys()) this.#reopen(uri)
 		}
 	}
 
@@ -116,14 +125,13 @@ export class ProjectWorkspace extends Workspace {
 			const created = this.#makeFile(uri, languageId, view.state.doc)
 			this.#files.set(uri, created)
 			if (this.#connected) this.client.didOpen(created)
-		} else if (!file.doc.eq(view.state.doc)) {
-			// The plugin assumes the server holds the view's document. When the
-			// project snapshot is stale (e.g. edits between render and mount),
-			// reopen the file with the view's text.
-			if (this.#connected) this.client.didClose(uri)
-			const reopened = this.#makeFile(uri, file.languageId, view.state.doc)
-			this.#files.set(uri, reopened)
-			if (this.#connected) this.client.didOpen(reopened)
+		} else {
+			// Reopen the file on attach: it (re)focuses the document on the
+			// server (its analysis only publishes diagnostics for the focused
+			// file) and syncs the view's text when the project snapshot is
+			// stale (e.g. edits between render and mount). The plugin assumes
+			// the server holds the view's document.
+			this.#reopen(uri)
 		}
 
 		const resolve = this.#displayResolvers.get(uri)
@@ -131,6 +139,16 @@ export class ProjectWorkspace extends Workspace {
 			this.#displayResolvers.delete(uri)
 			resolve(view)
 		}
+	}
+
+	/** Close and re-open a file, taking its text from the attached view. */
+	#reopen(uri: string): void {
+		const file = this.#files.get(uri)
+		if (!file || !this.#connected) return
+		this.client.didClose(uri)
+		const reopened = this.#makeFile(uri, file.languageId, this.#viewFor(uri)?.state.doc ?? file.doc)
+		this.#files.set(uri, reopened)
+		this.client.didOpen(reopened)
 	}
 
 	closeFile(uri: string, view: EditorView): void {

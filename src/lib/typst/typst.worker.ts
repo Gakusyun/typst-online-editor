@@ -251,6 +251,42 @@ function resetCompiler(): void {
 // Compilation
 // ============================================================================
 
+// typst.ts reports a source file that is absent from the virtual file system as
+// "access denied" and points at typst's CLI `--root` flag, which does not exist
+// in a browser editor. `clarifyLoadErrors` turns that into what actually
+// happened and names the referenced file.
+const ACCESS_DENIED_HINT = /, hints: cannot read file outside of project root, you can adjust the project root with the --root argument/;
+
+/**
+ * Rewrites the misleading "access denied" wording of missing-file diagnostics.
+ */
+function clarifyLoadErrors(diagnostics: string[], files: Record<string, string>): string[] {
+	return diagnostics.map((diagnostic) => {
+		if (!diagnostic.includes('failed to load file (access denied)')) return diagnostic;
+		const ref = referencedFile(files, diagnostic);
+		const reason = ref ? `"${ref}" is not part of this project` : 'the file is not part of this project';
+		return diagnostic
+			.replace(ACCESS_DENIED_HINT, '')
+			.replace('failed to load file (access denied)', `failed to load file (${reason})`);
+	});
+}
+
+/**
+ * Reads the file name out of a missing-file diagnostic. Unix-format diagnostics
+ * point at the reference (`/main.typ:1:10: error: ...`), so the literal that
+ * names the missing file is taken from the source at that position.
+ */
+function referencedFile(files: Record<string, string>, diagnostic: string): string | null {
+	const match = /^(.*?):(\d+):(\d+): /.exec(diagnostic);
+	if (!match) return null;
+	const source = files[match[1].replace(/^\//, '')];
+	if (source === undefined) return null;
+	const line = source.split('\n')[Number(match[2]) - 1];
+	if (line === undefined) return null;
+	const quoted = /["']([^"']+)["']/.exec(line.slice(Number(match[3]) - 1));
+	return quoted ? quoted[1] : null;
+}
+
 async function compilePdf(
 	files: Record<string, string>,
 	mainFile: string,
@@ -307,7 +343,7 @@ async function compilePdf(
 	});
 
 	// Process diagnostics
-	const diagnostics = (result.diagnostics ?? []).map(String);
+	const diagnostics = clarifyLoadErrors((result.diagnostics ?? []).map(String), files);
 	
 	// Enhanced error reporting
 	if (!result.result) {

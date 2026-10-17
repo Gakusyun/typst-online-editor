@@ -46,9 +46,14 @@ const events: number[] = []
 const pending: LspMessage[] = []
 const docs = new Map<string, DocState>()
 const packages = new Map<string, string | null>()
+const projectFiles = new Set<string>()
 
-self.onmessage = (e: MessageEvent<{ type: string; message?: string }>) => {
+self.onmessage = (e: MessageEvent<{ type: string; message?: string; paths?: string[] }>) => {
 	const data = e.data
+	if (data.type === 'files' && Array.isArray(data.paths)) {
+		updateProjectFiles(data.paths)
+		return
+	}
 	if (data.type !== 'message' || typeof data.message !== 'string') return
 	const msg = JSON.parse(data.message) as LspMessage
 	// The wasm server takes seconds to download and instantiate; queue client
@@ -138,16 +143,103 @@ function isLspError(value: unknown): value is { code: number; message: string } 
 	)
 }
 
-/** Drop the vacuous font diagnostic; returns null when params are malformed. */
+/** Drop vacuous diagnostics; returns null when params are malformed. */
 function keptDiagnostics(params: unknown): unknown[] | null {
 	if (typeof params !== 'object' || params === null || !('diagnostics' in params)) return null
 	const diagnostics = params.diagnostics
 	if (!Array.isArray(diagnostics)) return null
+	const uri = typeof params === 'object' && 'uri' in params && typeof params.uri === 'string' ? params.uri : null
+	const text = uri ? docs.get(uri)?.text : undefined
 	return diagnostics.filter((d) => {
-		if (typeof d !== 'object' || d === null) return true
-		if (!('severity' in d) || !('message' in d)) return true
-		return !(d.severity === 1 && d.message === VACUOUS_FONT_DIAGNOSTIC)
+		if (isVacuousFontDiagnostic(d)) return false
+		// Files that exist in the project but cannot enter the analysis world
+		// (binary files, or files added after the document was analyzed) must
+		// not report "failed to load file".
+		if (text && uri && isMissingProjectFileDiagnostic(d, uri, text)) return false
+		return true
 	})
+}
+
+function isVacuousFontDiagnostic(d: unknown): boolean {
+	if (typeof d !== 'object' || d === null || !('severity' in d) || !('message' in d)) return false
+	return d.severity === 1 && d.message === VACUOUS_FONT_DIAGNOSTIC
+}
+
+function isMissingProjectFileDiagnostic(d: unknown, uri: string, text: string): boolean {
+	if (typeof d !== 'object' || d === null || !('message' in d) || !('range' in d)) return false
+	if (typeof d.message !== 'string' || !d.message.startsWith('failed to load file')) return false
+	const ref = referencedPath(text, d.range)
+	return ref !== null && isProjectFile(uri, ref)
+}
+
+interface LspPosition {
+	line: number
+	character: number
+}
+
+function asPosition(value: unknown): LspPosition | null {
+	if (typeof value !== 'object' || value === null || !('line' in value) || !('character' in value)) {
+		return null
+	}
+	if (typeof value.line !== 'number' || typeof value.character !== 'number') return null
+	return { line: value.line, character: value.character }
+}
+
+function referencedPath(text: string, range: unknown): string | null {
+	if (typeof range !== 'object' || range === null || !('start' in range) || !('end' in range)) {
+		return null
+	}
+	const start = asPosition(range.start)
+	const end = asPosition(range.end)
+	if (!start || !end) return null
+	const slice = text.slice(docOffset(text, start), docOffset(text, end))
+	const quoted = /["']([^"']+)["']/.exec(slice)
+	return quoted ? quoted[1] : slice.trim() || null
+}
+
+function docOffset(text: string, pos: LspPosition): number {
+	let offset = 0
+	for (let line = 0; line < pos.line; line++) {
+		const next = text.indexOf('\n', offset)
+		if (next < 0) return text.length
+		offset = next + 1
+	}
+	return Math.min(offset + pos.character, text.length)
+}
+
+function isProjectFile(uri: string, ref: string): boolean {
+	const slash = uri.lastIndexOf('/')
+	const base = decodeURIComponent(uri.slice('file://'.length, slash < 0 ? undefined : slash)) || '/'
+	const joined = ref.startsWith('/') ? ref : `${base}/${ref}`
+	return projectFiles.has(normalizePath(joined))
+}
+
+function normalizePath(path: string): string {
+	const parts: string[] = []
+	for (const segment of path.split('/')) {
+		if (!segment || segment === '.') continue
+		if (segment === '..') parts.pop()
+		else parts.push(segment)
+	}
+	return '/' + parts.join('/')
+}
+
+function updateProjectFiles(paths: string[]): void {
+	const next = new Set(paths.map((p) => normalizePath(`/${p.replace(/^\/+/, '')}`)))
+	let changed = next.size !== projectFiles.size
+	if (!changed) {
+		for (const path of next) {
+			if (!projectFiles.has(path)) {
+				changed = true
+				break
+			}
+		}
+	}
+	if (!changed) return
+	projectFiles.clear()
+	for (const path of next) projectFiles.add(path)
+	// New files must be visible to the analysis of open documents.
+	nudgeUserDocsSoon()
 }
 
 function post(message: LspMessage): void {
@@ -218,6 +310,7 @@ let nudgeTimer: number | undefined
 function nudgeUserDocsSoon(): void {
 	clearTimeout(nudgeTimer)
 	nudgeTimer = self.setTimeout(() => {
+		if (!ready) return
 		for (const [uri, state] of docs) {
 			if (!USER_DOC_URI.test(uri) || uri.startsWith('file:///pkg/')) continue
 			state.version += 1
@@ -284,6 +377,6 @@ main().catch((error) => {
 	;(self as unknown as Worker).postMessage({
 		type: 'status',
 		status: 'error',
-		detail: error instanceof Error ? error.message : String(error),
+		detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
 	})
 })
