@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'preact/hooks'
 import { TypstCompilerService, type CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { debounce } from '@/lib/utils/helpers'
 

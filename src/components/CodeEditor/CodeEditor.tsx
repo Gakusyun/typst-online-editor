@@ -1,6 +1,5 @@
-'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'preact/hooks'
 import { createHighlighter, type Highlighter } from 'shiki'
 
 interface CodeEditorProps {
@@ -44,7 +43,7 @@ export default function CodeEditor({ filePath, content, onChange }: CodeEditorPr
 				try {
 					// Load all languages we'll need
 					const { bundledLanguages } = await import('shiki')
-					const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+					const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
 					const response = await fetch(`${publicBasePath}/textmate-sintax/typst.tmLanguage.json`)
 					const typstGrammar = await response.json()
 					
@@ -163,9 +162,9 @@ export default function CodeEditor({ filePath, content, onChange }: CodeEditorPr
 							height: 'auto'
 						}}
 						value={isBinaryFile ? getBinaryMessage() : content}
-						onChange={(e) => onChange(e.target.value)}
+						onInput={(e) => onChange(e.currentTarget.value)}
 						placeholder="Type here..."
-						spellCheck={false}
+						spellcheck={false}
 						readOnly={isBinaryFile}
 					/>
 				</div>

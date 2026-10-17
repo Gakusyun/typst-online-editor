@@ -1,6 +1,5 @@
-'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
 import { TYPST_EXAMPLES, fetchExample } from '@/lib/typst/examples/TypstExamples'
 import type { Project } from '@/lib/storage/ProjectStorage'

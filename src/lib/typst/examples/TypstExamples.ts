@@ -7,7 +7,7 @@ export interface TypstExample {
 	additionalFiles?: Array<{ path: string; filePath: string }>
 }
 
-const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export const TYPST_EXAMPLES: TypstExample[] = [
 	{

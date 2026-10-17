@@ -3,32 +3,29 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "start": "vite preview",
+    "lint": "oxlint src",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@myriaddreamin/typst-ts-renderer": "^0.7.0-rc2",
-    "@myriaddreamin/typst-ts-web-compiler": "^0.7.0-rc2",
-    "@myriaddreamin/typst.ts": "^0.7.0-rc2",
-    "lucide-react": "^0.562.0",
-    "next": "16.1.1",
-    "pdf.js": "^0.1.0",
-    "pdfjs-dist": "^5.4.530",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "@myriaddreamin/typst-ts-renderer": "^0.7.0",
+    "@myriaddreamin/typst-ts-web-compiler": "^0.7.0",
+    "@myriaddreamin/typst.ts": "^0.7.0",
+    "lucide-preact": "^1.59.0",
+    "pdfjs-dist": "^6.4.299",
+    "preact": "^11.0.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.1",
-    "shiki": "^3.20.0",
+    "@preact/preset-vite": "^2.10.6",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26",
+    "oxlint": "^1.88.0",
+    "shiki": "^4.5.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
-  }
+    "typescript": "^7",
+    "vite": "^8.3.4"
+  },
+  "type": "module"
 }

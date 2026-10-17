@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, Maximize2, Minimize2, ChevronLeft, ChevronRight, X, Eye } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2, Minimize2, ChevronLeft, ChevronRight, X, Eye } from 'lucide-preact'
 
 interface PdfToolbarProps {
 	pdfUrl: string | null

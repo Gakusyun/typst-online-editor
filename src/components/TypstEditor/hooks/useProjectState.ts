@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'preact/hooks'
 import { projectStorage, type Project } from '@/lib/storage/ProjectStorage'
 
 const TEMP_PROJECT: Project = {

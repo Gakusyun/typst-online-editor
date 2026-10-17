@@ -1,8 +1,9 @@
-'use client'
+
+import type { TargetedMouseEvent } from 'preact'
 
 interface ResizeHandleProps {
 	isResizing: boolean
-	onMouseDown: (e: React.MouseEvent) => void
+	onMouseDown: (e: TargetedMouseEvent<HTMLElement>) => void
 	orientation?: 'vertical' | 'horizontal'
 }
 

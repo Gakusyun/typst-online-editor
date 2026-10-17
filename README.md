@@ -9,54 +9,54 @@
 
 ## 技术栈
 
-基于 Next.js（React）构建，使用 [Typst.ts](https://github.com/Myriad-Dreamin/typst.ts)（[@myriaddreamin](https://github.com/Myriad-Dreamin) 开发的 Typst JavaScript 实现）、PDF.js 和 Shiki。
+基于 Preact + Vite 构建（包管理使用 pnpm），使用 [Typst.ts](https://github.com/Myriad-Dreamin/typst.ts)（[@myriaddreamin](https://github.com/Myriad-Dreamin) 开发的 Typst JavaScript 实现）、PDF.js 和 Shiki。
 
 ## 主要特性
 
-- 借助 Typst.ts 实现全客户端编译（wasm 文件来自其 CDN）。
+- 借助 Typst.ts 实现全客户端编译（wasm 文件随 [@myriaddreamin/typst-ts-web-compiler](https://www.npmjs.com/package/@myriaddreamin/typst-ts-web-compiler) 包发布，同步到本地 `public/wasm/` 使用）。
 - 完整的示例演示：可加载不同示例、文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
 ## 使用与部署
 
-部署 Next.js 应用的基本步骤如下：
-
-最简单的方式是 fork 本仓库，然后部署到 Vercel。
-
-部署完成后可以克隆到本地开发。先安装依赖：
+本地开发先安装依赖（仅使用 pnpm）：
 
 ```
-npm install
+pnpm install
 ```
 
 然后启动开发服务器：
 
 ```
-npm run dev
+pnpm dev
 ```
 
 打开终端输出的 localhost 地址即可。
 
-生产模式对应的命令（Vercel 服务器上运行的命令）是 `npm run build` 和 `npm run start`。
+生产构建：
 
-也可以将应用导出为静态 HTML+CSS+JS，部署到 GitHub Pages，步骤见下方折叠内容。
+```
+pnpm build
+```
+
+产物在 `dist` 文件夹，本地预览用 `pnpm preview`。部署到 Vercel 时选择 Vite 预设（会自动识别本仓库），构建命令 `pnpm build`、输出目录 `dist`。
 
 <details>
 
-<summary>部署为静态站点</summary>
+<summary>部署为静态站点（如 GitHub Pages）</summary>
 
-1. 先取消 `next.config.ts` 中相关行的注释
-2. 创建 `.env.production`，内容如下：
+Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配置文件：
+
+1. 运行 `pnpm build`，生成的 `dist` 文件夹即为完整站点
+2. 若部署到子路径（例如 GitHub Pages 的项目页），构建时指定 base：
 
   ```
-  NEXT_PUBLIC_BASE_PATH="/typst-online-editor-static" # 换成你的静态仓库名
+  pnpm build -- --base=/typst-online-editor-static/ # 换成你的静态仓库名
   ```
 
-3. 运行 `npm run build`
-4. 生成的 `out` 文件夹内容（不是文件夹本身）即为可发布到 GitHub Pages 的站点
-5. 在仓库根目录手动添加一个空的 `.nojekyll` 文件
-6. 访问站点确认可用
-7. 完成后重新注释 `next.config.ts` 中的行，并删除 `.env.production`（或注释其内容），恢复 Next.js 应用原状
+3. 发布 `dist` 文件夹内容（不是文件夹本身）到目标站点
+4. 在发布目录添加一个空的 `.nojekyll` 文件
+5. 访问站点确认可用
 
 静态站点示例：
 
@@ -77,7 +77,6 @@ MIT 许可证。
 - @myriaddreamin/typst-ts-renderer
 - @myriaddreamin/typst-ts-web-compiler
 - @myriaddreamin/typst.ts
-- pdf.js
 - pdfjs-dist
 
 均采用 Apache-2.0 许可证。Typst.ts 使用的 Typst 编译器同样采用 Apache-2.0 许可证。

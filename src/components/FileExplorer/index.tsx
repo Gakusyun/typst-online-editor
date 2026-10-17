@@ -1,7 +1,7 @@
-'use client'
 
-import { useState } from 'react'
-import { PanelLeft, Upload } from 'lucide-react'
+import type { ComponentChildren, TargetedDragEvent } from 'preact'
+import { useState } from 'preact/hooks'
+import { PanelLeft, Upload } from 'lucide-preact'
 import type { FileExplorerProps } from './types'
 import type { FileNode } from './types'
 import { useFileTree } from './hooks/useFileTree'
@@ -125,8 +125,8 @@ export default function FileExplorer({
 	}
 
 	// Handle external drag events
-	function handleExternalDragEnter(e: React.DragEvent) {
-		if (e.dataTransfer.types.includes('Files')) {
+	function handleExternalDragEnter(e: TargetedDragEvent<HTMLElement>) {
+		if (e.dataTransfer?.types.includes('Files')) {
 			e.preventDefault()
 			e.stopPropagation()
 			setDragOverCounter(prev => prev + 1)
@@ -134,8 +134,8 @@ export default function FileExplorer({
 		}
 	}
 
-	function handleExternalDragLeave(e: React.DragEvent) {
-		if (e.dataTransfer.types.includes('Files')) {
+	function handleExternalDragLeave(e: TargetedDragEvent<HTMLElement>) {
+		if (e.dataTransfer?.types.includes('Files')) {
 			e.preventDefault()
 			e.stopPropagation()
 			setDragOverCounter(prev => {
@@ -148,16 +148,16 @@ export default function FileExplorer({
 		}
 	}
 
-	function handleExternalDragOver(e: React.DragEvent) {
-		if (e.dataTransfer.types.includes('Files')) {
+	function handleExternalDragOver(e: TargetedDragEvent<HTMLElement>) {
+		if (e.dataTransfer?.types.includes('Files')) {
 			e.preventDefault()
 			e.stopPropagation()
 			e.dataTransfer.dropEffect = 'copy'
 		}
 	}
 
-	async function handleExternalDrop(e: React.DragEvent, targetPath: string = '') {
-		if (e.dataTransfer.types.includes('Files')) {
+	async function handleExternalDrop(e: TargetedDragEvent<HTMLElement>, targetPath: string = '') {
+		if (e.dataTransfer?.types.includes('Files')) {
 			e.preventDefault()
 			e.stopPropagation()
 			setIsDraggingExternal(false)
@@ -170,7 +170,7 @@ export default function FileExplorer({
 		}
 	}
 
-	function renderFileTree(nodes: FileNode[], depth = 0): React.ReactNode {
+	function renderFileTree(nodes: FileNode[], depth = 0): ComponentChildren {
 		return nodes.map(node => {
 			if (node.isFolder) {
 				const isExpanded = expandedFolders.has(node.path)
@@ -278,14 +278,14 @@ export default function FileExplorer({
 				onDragEnter={handleExternalDragEnter}
 				onDragLeave={handleExternalDragLeave}
 				onDragOver={(e) => {
-					if (e.dataTransfer.types.includes('Files')) {
+					if (e.dataTransfer?.types.includes('Files')) {
 						handleExternalDragOver(e)
 					} else if (draggedItem && !e.defaultPrevented) {
 						handleDragOver('', false, e)
 					}
 				}}
 				onDrop={(e) => {
-					if (e.dataTransfer.types.includes('Files')) {
+					if (e.dataTransfer?.types.includes('Files')) {
 						handleExternalDrop(e, '')
 					} else if (draggedItem && !e.defaultPrevented) {
 						handleDrop('', false, e)

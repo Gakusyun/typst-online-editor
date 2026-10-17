@@ -1,4 +1,4 @@
-import { Loader2, XCircle } from 'lucide-react'
+import { Loader2, XCircle } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
 
 interface PdfPlaceholderProps {

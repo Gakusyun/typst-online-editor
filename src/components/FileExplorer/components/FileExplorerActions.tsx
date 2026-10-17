@@ -1,4 +1,4 @@
-import { FilePlus, FolderPlus } from 'lucide-react'
+import { FilePlus, FolderPlus } from 'lucide-preact'
 
 interface FileExplorerActionsProps {
 	onCreateFile: () => void

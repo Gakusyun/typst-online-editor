@@ -1,17 +1,18 @@
-import { useState } from 'react'
+import type { TargetedDragEvent } from 'preact'
+import { useState } from 'preact/hooks'
 
 export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) => void) {
 	const [draggedItem, setDraggedItem] = useState<string | null>(null)
 	const [dropTarget, setDropTarget] = useState<string | null>(null)
 
-	const handleDragStart = (path: string, e: React.DragEvent) => {
+	const handleDragStart = (path: string, e: TargetedDragEvent<HTMLElement>) => {
 		// Don't allow dragging main.typ
 		if (path === 'main.typ') {
 			e.preventDefault()
 			return
 		}
 		setDraggedItem(path)
-		e.dataTransfer.effectAllowed = 'move'
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
 	}
 
 	const handleDragEnd = () => {
@@ -19,12 +20,12 @@ export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) =>
 		setDropTarget(null)
 	}
 
-	const handleDragOver = (path: string, isFolder: boolean, e: React.DragEvent) => {
+	const handleDragOver = (path: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-		
+
 		if (!draggedItem || draggedItem === path) return
-		
+
 		// Only allow dropping on folders
 		if (isFolder) {
 			setDropTarget(path)
@@ -34,15 +35,15 @@ export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) =>
 		}
 	}
 
-	const handleDrop = (targetPath: string, isFolder: boolean, e: React.DragEvent) => {
+	const handleDrop = (targetPath: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-		
+
 		if (!draggedItem) return
-		
+
 		const fileName = draggedItem.split('/').pop()
 		let newPath: string
-		
+
 		if (isFolder) {
 			// Drop into folder
 			newPath = `${targetPath}/${fileName}`
@@ -50,11 +51,11 @@ export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) =>
 			// Drop at root
 			newPath = fileName || draggedItem
 		}
-		
+
 		if (newPath !== draggedItem) {
 			onFileMove(draggedItem, newPath)
 		}
-		
+
 		setDraggedItem(null)
 		setDropTarget(null)
 	}

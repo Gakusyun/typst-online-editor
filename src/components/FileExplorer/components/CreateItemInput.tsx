@@ -1,4 +1,4 @@
-import { File, Folder, Check, X } from 'lucide-react'
+import { File, Folder, Check, X } from 'lucide-preact'
 
 interface CreateItemInputProps {
 	type: 'file' | 'folder'
@@ -28,7 +28,7 @@ export default function CreateItemInput({
 				<input
 					type="text"
 					value={value}
-					onChange={(e) => onChange(e.target.value)}
+					onInput={(e) => onChange(e.currentTarget.value)}
 					onKeyDown={(e) => {
 						if (e.key === 'Enter') onConfirm()
 						if (e.key === 'Escape') onCancel()

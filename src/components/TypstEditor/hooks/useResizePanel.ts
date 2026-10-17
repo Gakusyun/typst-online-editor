@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import type { TargetedMouseEvent } from 'preact'
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks'
 
 interface UseResizePanelOptions {
 	minValue: number
@@ -15,7 +16,7 @@ export function useResizePanel(options: UseResizePanelOptions) {
 	const startXRef = useRef(0)
 	const startValueRef = useRef(initialValue)
 
-	const startResize = useCallback((e: React.MouseEvent) => {
+	const startResize = useCallback((e: TargetedMouseEvent<HTMLElement>) => {
 		e.preventDefault()
 		setIsResizing(true)
 		startXRef.current = e.clientX
@@ -29,7 +30,7 @@ export function useResizePanel(options: UseResizePanelOptions) {
 			const delta = e.clientX - startXRef.current
 			const newValue = startValueRef.current + delta
 			const clampedValue = Math.min(Math.max(newValue, minValue), dynamicMaxValue)
-			
+
 			setValue(clampedValue)
 			onResize?.(clampedValue)
 		}

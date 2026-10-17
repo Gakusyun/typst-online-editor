@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'preact/hooks'
 import { getPdfjs } from '@/lib/pdf/pdfjs'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 
@@ -40,7 +40,7 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 		const loadPdf = async () => {
 			try {
 				const pdfjs = await getPdfjs()
-				const loadingTask = pdfjs.getDocument(pdfUrl)
+				const loadingTask = pdfjs.getDocument({ url: pdfUrl })
 				const pdf = await loadingTask.promise
 				
 				if (mounted) {

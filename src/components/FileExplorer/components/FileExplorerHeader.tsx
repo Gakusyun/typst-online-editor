@@ -1,4 +1,4 @@
-import { PanelLeftClose } from 'lucide-react'
+import { PanelLeftClose } from 'lucide-preact'
 import type { Project } from '@/lib/storage/ProjectStorage'
 
 interface FileExplorerHeaderProps {

@@ -71,7 +71,7 @@ const CJK_FONTS: string[] = [
 
 
 // const TYPST_WASM_URL = '/wasm/typst_ts_web_compiler_bg.wasm'; (Same shit but the below line is in case you also export to a static site)
-const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
 const TYPST_WASM_URL = `${publicBasePath}/wasm/typst_ts_web_compiler_bg.wasm`;
 
 

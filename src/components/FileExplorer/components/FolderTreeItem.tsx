@@ -1,4 +1,5 @@
-import { Folder, ChevronRight, ChevronDown, Edit2, Trash2, Check, X } from 'lucide-react'
+import type { ComponentChildren, TargetedDragEvent } from 'preact'
+import { Folder, ChevronRight, ChevronDown, Edit2, Trash2, Check, X } from 'lucide-preact'
 import type { FileNode } from '../types'
 
 interface FolderTreeItemProps {
@@ -16,10 +17,10 @@ interface FolderTreeItemProps {
 	onCancelRename: () => void
 	onRenameChange: (value: string) => void
 	onDelete: () => void
-	onDragOver: (e: React.DragEvent) => void
-	onDrop: (e: React.DragEvent) => void
-	onExternalDrop?: (e: React.DragEvent, path: string) => void
-	children?: React.ReactNode
+	onDragOver: (e: TargetedDragEvent<HTMLElement>) => void
+	onDrop: (e: TargetedDragEvent<HTMLElement>) => void
+	onExternalDrop?: (e: TargetedDragEvent<HTMLElement>, path: string) => void
+	children?: ComponentChildren
 }
 
 export default function FolderTreeItem({
@@ -53,7 +54,7 @@ export default function FolderTreeItem({
 						<input
 							type="text"
 							value={renameValue}
-							onChange={(e) => onRenameChange(e.target.value)}
+							onInput={(e) => onRenameChange(e.currentTarget.value)}
 							onKeyDown={(e) => {
 								if (e.key === 'Enter') onRename()
 								if (e.key === 'Escape') onCancelRename()
@@ -86,7 +87,7 @@ export default function FolderTreeItem({
 					onSelect()
 				}}
 				onDragOver={(e) => {
-					if (e.dataTransfer.types.includes('Files')) {
+					if (e.dataTransfer?.types.includes('Files')) {
 						e.preventDefault()
 						e.stopPropagation()
 						e.dataTransfer.dropEffect = 'copy'
@@ -95,7 +96,7 @@ export default function FolderTreeItem({
 					}
 				}}
 				onDrop={(e) => {
-					if (e.dataTransfer.types.includes('Files') && onExternalDrop) {
+					if (e.dataTransfer?.types.includes('Files') && onExternalDrop) {
 						onExternalDrop(e, node.path)
 					} else {
 						onDrop(e)

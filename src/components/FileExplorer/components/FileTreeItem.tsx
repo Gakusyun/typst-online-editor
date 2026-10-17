@@ -1,4 +1,5 @@
-import { File, Star, Trash2, Edit2, Check, X } from 'lucide-react'
+import type { TargetedDragEvent } from 'preact'
+import { File, Star, Trash2, Edit2, Check, X } from 'lucide-preact'
 
 interface FileTreeItemProps {
 	fileName: string
@@ -17,7 +18,7 @@ interface FileTreeItemProps {
 	onCancelRename: () => void
 	onRenameChange: (value: string) => void
 	onDelete: () => void
-	onDragStart: (e: React.DragEvent) => void
+	onDragStart: (e: TargetedDragEvent<HTMLElement>) => void
 	onDragEnd: () => void
 }
 
@@ -49,7 +50,7 @@ export default function FileTreeItem({
 					<input
 						type="text"
 						value={renameValue}
-						onChange={(e) => onRenameChange(e.target.value)}
+						onInput={(e) => onRenameChange(e.currentTarget.value)}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') onRename()
 							if (e.key === 'Escape') onCancelRename()

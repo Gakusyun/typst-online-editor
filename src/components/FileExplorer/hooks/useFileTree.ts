@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'preact/hooks'
 
 export function useFileTree() {
 	const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']))

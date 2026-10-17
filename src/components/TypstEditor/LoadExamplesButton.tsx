@@ -1,6 +1,5 @@
-'use client'
 
-import { FileText, ChevronDown } from 'lucide-react'
+import { FileText, ChevronDown } from 'lucide-preact'
 import { TYPST_EXAMPLES } from '@/lib/typst/examples/TypstExamples'
 
 interface LoadExamplesButtonProps {

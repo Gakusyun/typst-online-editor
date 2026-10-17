@@ -1,5 +1,5 @@
-import { Loader2 } from 'lucide-react'
-import type { RefObject, MutableRefObject } from 'react'
+import { Loader2 } from 'lucide-preact'
+import type { RefObject } from 'preact'
 import type { RenderTask } from 'pdfjs-dist'
 
 interface CanvasInfo {
@@ -8,10 +8,10 @@ interface CanvasInfo {
 }
 
 interface PdfCanvasProps {
-	canvasRefs: MutableRefObject<Map<number, CanvasInfo>>
-	pageRefs: MutableRefObject<Map<number, HTMLDivElement>>
-	textLayerRefs: MutableRefObject<Map<number, HTMLDivElement>>
-	annotationLayerRefs: MutableRefObject<Map<number, HTMLDivElement>>
+	canvasRefs: RefObject<Map<number, CanvasInfo>>
+	pageRefs: RefObject<Map<number, HTMLDivElement>>
+	textLayerRefs: RefObject<Map<number, HTMLDivElement>>
+	annotationLayerRefs: RefObject<Map<number, HTMLDivElement>>
 	containerRef: RefObject<HTMLDivElement | null>
 	isRendering: boolean
 	totalPages: number

@@ -1,6 +1,5 @@
-'use client'
 
-import { useState } from 'react'
+import { useState } from 'preact/hooks'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { usePdfRenderer } from './hooks/usePdfRenderer'
 import PdfToolbar from './PdfToolbar'
