@@ -1,5 +1,6 @@
 import type { TargetedDragEvent } from 'preact'
 import { File, Star, Trash2, Edit2, Check, X } from 'lucide-preact'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface FileTreeItemProps {
 	fileName: string
@@ -42,6 +43,7 @@ export default function FileTreeItem({
 	onDragStart,
 	onDragEnd,
 }: FileTreeItemProps) {
+	const { t } = useI18n()
 	if (isRenaming) {
 		return (
 			<div className="px-4 py-2 bg-gray-800" style={{ paddingLeft: `${depth * 12 + 16}px` }}>
@@ -58,10 +60,10 @@ export default function FileTreeItem({
 						className="flex-1 px-2 py-1 text-sm bg-gray-700 text-gray-100 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
 						autoFocus
 					/>
-					<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title="Rename">
+					<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.rename')}>
 						<Check className="w-3 h-3 text-green-400" />
 					</button>
-					<button onClick={onCancelRename} className="p-1 hover:bg-gray-700 rounded" title="Cancel">
+					<button onClick={onCancelRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.cancel')}>
 						<X className="w-3 h-3 text-red-400" />
 					</button>
 				</div>
@@ -108,7 +110,7 @@ export default function FileTreeItem({
 								onStartRename()
 							}}
 							className="p-1 hover:bg-gray-600 rounded"
-							title="Rename file"
+							title={t('files.renameFile')}
 						>
 							<Edit2 className="w-3 h-3 text-gray-300" />
 						</button>
@@ -120,7 +122,7 @@ export default function FileTreeItem({
 								onDelete()
 							}}
 							className="p-1 hover:bg-red-900/50 rounded"
-							title="Delete file"
+							title={t('files.deleteFile')}
 						>
 							<Trash2 className="w-3 h-3 text-red-400" />
 						</button>

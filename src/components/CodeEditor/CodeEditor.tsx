@@ -1,6 +1,7 @@
 
 import { useEffect, useState, useRef } from 'preact/hooks'
 import { createHighlighter, type Highlighter } from 'shiki'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface CodeEditorProps {
 	filePath: string
@@ -9,6 +10,7 @@ interface CodeEditorProps {
 }
 
 export default function CodeEditor({ filePath, content, onChange }: CodeEditorProps) {
+	const { t } = useI18n()
 	const [highlightedCode, setHighlightedCode] = useState('')
 	const [isInitializing, setIsInitializing] = useState(false)
 	const highlighterRef = useRef<Highlighter | null>(null)
@@ -30,8 +32,8 @@ export default function CodeEditor({ filePath, content, onChange }: CodeEditorPr
 	const isBinaryFile = isImageFile || isFontFile
 	
 	const getBinaryMessage = () => {
-		if (isImageFile) return 'This is an image (binary data). Content too large to show here.'
-		if (isFontFile) return 'This is a font file (binary data). Content too large to show here.'
+		if (isImageFile) return t('editor.imageContent')
+		if (isFontFile) return t('editor.fontContent')
 		return ''
 	}
 
@@ -117,7 +119,7 @@ export default function CodeEditor({ filePath, content, onChange }: CodeEditorPr
 				{/* Loading indicator */}
 				{needsHighlighting && isInitializing && (
 					<div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm z-10">
-						Initializing highlighter...
+						{t('editor.initializingHighlighter')}
 					</div>
 				)}
 				
@@ -163,7 +165,7 @@ export default function CodeEditor({ filePath, content, onChange }: CodeEditorPr
 						}}
 						value={isBinaryFile ? getBinaryMessage() : content}
 						onInput={(e) => onChange(e.currentTarget.value)}
-						placeholder="Type here..."
+						placeholder={t('editor.typeHere')}
 						spellcheck={false}
 						readOnly={isBinaryFile}
 					/>

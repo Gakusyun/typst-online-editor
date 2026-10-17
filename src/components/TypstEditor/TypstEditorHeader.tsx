@@ -1,7 +1,9 @@
 
 import type { ComponentChildren } from 'preact'
-import { Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
+import { Globe, Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
+import { LANGS, LANG_LABELS, type Lang } from '@/lib/i18n/i18n'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 // lucide 1.x dropped brand icons, so the GitHub mark is inlined here (Simple Icons, CC0).
 function Github({ className }: { className?: string }) {
@@ -30,6 +32,7 @@ export default function TypstEditorHeader({
 	onCompileNow,
 	onDownload,
 }: TypstEditorHeaderProps) {
+	const { t, lang, setLang } = useI18n()
 	const getStatusText = (): ComponentChildren => {
 		const textSizeClass = isMobile ? 'text-xs' : ''
 		switch (status) {
@@ -37,37 +40,37 @@ export default function TypstEditorHeader({
 				return (
 					<span className={`flex items-center gap-2 ${textSizeClass}`}>
 						<Loader2 className="w-4 h-4 animate-spin" />
-						{hasCompiled ? 'Compiling...' : 'Initializing compiler...'}
+						{hasCompiled ? t('status.compiling') : t('status.initializing')}
 					</span>
 				)
 			case 'done':
 				return (
 					<span className={`flex items-center gap-2 ${textSizeClass}`}>
 						<CheckCircle2 className="w-4 h-4 text-green-500" />
-						Compiled
+						{t('status.compiled')}
 					</span>
 				)
 			case 'error':
 				return (
 					<span className={`flex items-center gap-2 ${textSizeClass}`}>
 						<XCircle className="w-4 h-4 text-red-500" />
-						Error
+						{t('status.error')}
 					</span>
 				)
 			case 'idle':
 				return hasCompiled ? (
 					<span className={`flex items-center gap-2 ${textSizeClass}`}>
 						<Check className="w-4 h-4 text-green-500" />
-						Ready
+						{t('status.ready')}
 					</span>
 				) : (
 					<span className={`flex items-center gap-2 ${textSizeClass}`}>
 						<Zap className="w-4 h-4 text-blue-500" />
-						Ready to compile
+						{t('status.readyToCompile')}
 					</span>
 				)
 			default:
-				return 'Ready'
+				return t('status.ready')
 		}
 	}
 
@@ -82,7 +85,7 @@ export default function TypstEditorHeader({
 							target="_blank"
 							rel="noopener noreferrer"
 							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
-							title="View on GitHub"
+							title={t('header.viewOnGithub')}
 						>
 							<Github className="w-5 h-5" />
 						</a>
@@ -94,7 +97,7 @@ export default function TypstEditorHeader({
 							target="_blank"
 							rel="noopener noreferrer"
 							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
-							title="View on GitHub"
+							title={t('header.viewOnGithub')}
 						>
 						<Github className="w-5 h-5" />
 						</a>
@@ -110,7 +113,7 @@ export default function TypstEditorHeader({
 						onClick={onCompileNow}
 						disabled={status === 'compiling'}
 					>
-						Compile Now
+						{t('header.compileNow')}
 					</button>
 				)}
 				{pdfUrl && (
@@ -118,9 +121,24 @@ export default function TypstEditorHeader({
 						className={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 ${isMobile ? 'text-xs' : ''} text-nowrap`}
 						onClick={onDownload}
 					>
-						Download PDF
+						{t('header.downloadPdf')}
 					</button>
 				)}
+				<label className="flex items-center gap-1 text-gray-300" title={t('header.language')}>
+					<Globe className="w-4 h-4 shrink-0" />
+					<span className="sr-only">{t('header.language')}</span>
+					<select
+						value={lang}
+						onChange={(e) => setLang(e.currentTarget.value as Lang)}
+						className="bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						{LANGS.map((code) => (
+							<option key={code} value={code}>
+								{LANG_LABELS[code]}
+							</option>
+						))}
+					</select>
+				</label>
 			</div>
 		</div>
 	)

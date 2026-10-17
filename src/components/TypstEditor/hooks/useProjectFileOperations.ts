@@ -1,4 +1,5 @@
 import { type Project, type ProjectFile } from '@/lib/storage/ProjectStorage'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface UseFileOperationsProps {
 	currentProject: Project
@@ -13,6 +14,7 @@ export function useProjectFileOperations({
 	setActiveFilePath,
 	saveProject,
 }: UseFileOperationsProps) {
+	const { t } = useI18n()
 	
 	const getActiveFile = (): ProjectFile | null => {
 		return currentProject.files.find(f => f.path === activeFilePath) || null
@@ -35,7 +37,7 @@ export function useProjectFileOperations({
 
 	const handleFileCreate = (path: string, initialContent?: string) => {
 		if (currentProject.files.some(f => f.path === path)) {
-			alert('A file with this name already exists!')
+			alert(t('dialog.fileExists'))
 			return
 		}
 
@@ -58,7 +60,7 @@ export function useProjectFileOperations({
 		const placeholderPath = `${path}/.gitkeep`
 		
 		if (currentProject.files.some(f => f.path.startsWith(path + '/'))) {
-			alert('A folder with this name already exists!')
+			alert(t('dialog.folderExists'))
 			return
 		}
 
@@ -80,7 +82,7 @@ export function useProjectFileOperations({
 		if (oldPath === newPath) return
 		
 		if (currentProject.files.some(f => f.path === newPath)) {
-			alert('A file with this name already exists!')
+			alert(t('dialog.fileExists'))
 			return
 		}
 
@@ -141,7 +143,7 @@ export function useProjectFileOperations({
 		if (oldPath === newPath) return
 		
 		if (currentProject.files.some(f => f.path === newPath)) {
-			alert('A file with this name already exists at the destination!')
+			alert(t('dialog.fileExistsAtDestination'))
 			return
 		}
 

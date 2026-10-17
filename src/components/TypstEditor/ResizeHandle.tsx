@@ -1,5 +1,6 @@
 
 import type { TargetedMouseEvent } from 'preact'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface ResizeHandleProps {
 	isResizing: boolean
@@ -12,6 +13,8 @@ export default function ResizeHandle({
 	onMouseDown,
 	orientation = 'vertical'
 }: ResizeHandleProps) {
+	const { t } = useI18n()
+
 	if (orientation === 'horizontal') {
 		return (
 			<div
@@ -31,7 +34,7 @@ export default function ResizeHandle({
 			}`}
 			onMouseDown={onMouseDown}
 			style={{ userSelect: 'none' }}
-			title="Drag to resize"
+			title={t('layout.dragToResize')}
 		>
 			{/* Visual indicator dots */}
 			<div className="h-full flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-50 transition-opacity">

@@ -7,6 +7,7 @@ import type { FileNode } from './types'
 import { useFileTree } from './hooks/useFileTree'
 import { useFileOperations } from './hooks/useFileOperations'
 import { useDragAndDrop } from './hooks/useDragAndDrop'
+import { useI18n } from '@/lib/i18n/useI18n'
 import { buildFileTree } from './utils/buildFileTree'
 import FileExplorerHeader from './components/FileExplorerHeader'
 import FileExplorerActions from './components/FileExplorerActions'
@@ -61,6 +62,8 @@ export default function FileExplorer({
 		handleDrop,
 	} = useDragAndDrop(onFileMove)
 
+	const { t } = useI18n()
+
 	// Helper function to determine parent path for new items
 	function getParentPathForNewItem(): string {
 		if (!selectedItem) {
@@ -95,7 +98,7 @@ export default function FileExplorer({
 			// Check if file already exists
 			const fileExists = project.files.some(f => f.path === filePath)
 			if (fileExists) {
-				const overwrite = confirm(`File "${file.name}" already exists. Do you want to overwrite it?`)
+				const overwrite = confirm(t('dialog.overwriteFile', { name: file.name }))
 				if (!overwrite) continue
 			}
 
@@ -258,7 +261,7 @@ export default function FileExplorer({
 				<button
 					onClick={onToggleCollapse}
 					className="p-3 hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors"
-					title="Show Files"
+					title={t('files.show')}
 				>
 					<PanelLeft className="w-5 h-5" />
 				</button>
@@ -296,9 +299,9 @@ export default function FileExplorer({
 					<div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 pointer-events-none z-10">
 						<div className="text-center">
 							<Upload className="w-12 h-12 text-blue-400 mx-auto mb-2" />
-							<p className="text-blue-300 font-medium">Drop files to upload</p>
+							<p className="text-blue-300 font-medium">{t('files.dropToUpload')}</p>
 							<p className="text-gray-400 text-sm mt-1">
-								Supported: {ALLOWED_EXTENSIONS.join(', ')}
+								{t('files.supported', { extensions: ALLOWED_EXTENSIONS.join(', ') })}
 							</p>
 						</div>
 					</div>

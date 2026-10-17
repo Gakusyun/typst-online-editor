@@ -25,12 +25,13 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 
 |Path|Purpose|
 |---|---|
-|`index.html`, `src/main.tsx`|Vite entry: `index.html` mounts `#app`, `main.tsx` imports global CSS and renders `TypstEditor`|
+|`index.html`, `src/main.tsx`|Vite entry: `index.html` mounts `#app`, `main.tsx` imports global CSS and renders `I18nProvider` > `TypstEditor`|
 |`src/styles/`|`globals.css` (Tailwind import + Shiki wrap override) and the pdf.js `textlayer`/`annotationlayer` CSS|
 |`src/components/`|`TypstEditor/` (orchestrator + header + hooks), `CodeEditor/` (Shiki + textarea), `FileExplorer/` (virtual folder tree), `PDFViewer/` (canvas preview)|
 |`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM)|
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
+|`src/lib/i18n/`|UI strings + `I18n` contract: `messages.ts` (zh/en/de catalogs), `i18n.ts` (`Lang`, `I18n`, `translate`), `useI18n.ts`, `I18nProvider.tsx`|
 |`public/wasm/`|28 MB Typst WASM binary, **checked into git**; must match the installed `@myriaddreamin` version (see Known Quirks)|
 |`public/fonts/`|IBM Plex, DejaVu Mono, Libertinus Serif, NewCM (core, incl. Typst's default text set — self-hosted, never load from CDN); Noto CJK + NotoColorEmoji (lazy, content-detected)|
 |`public/textmate-sintax/`|Typst TextMate grammar for Shiki — spelling is *sic*, don't "fix" it|
@@ -60,6 +61,8 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - **Typing** — `strict: true`; typed arrays as `Uint8Array<ArrayBuffer>` (TS ≥ 5.7 feature); `as unknown as` casts allowed where `pdfjs-dist`/worker typings are wrong — keep the explanatory comments. TypeScript 7 has **no JS compiler API**, which is why the lint toolchain is oxlint, not typescript-eslint.
 
 **Recipe — add fonts:** drop files in `public/fonts/`, register in `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `typst.worker.ts`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
+
+**Recipe — add a language:** add a catalog to `src/lib/i18n/messages.ts` (typed against the `en` base — a missing key fails `tsc`), then register the code in `LANGS` and its endonym in `LANG_LABELS` (`src/lib/i18n/i18n.ts`). New UI strings go in `messages.ts` only; components read them via `useI18n().t`, never as JSX literals.
 
 ## Important Files
 

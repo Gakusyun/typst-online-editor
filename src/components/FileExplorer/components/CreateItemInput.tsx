@@ -1,4 +1,5 @@
 import { File, Folder, Check, X } from 'lucide-preact'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface CreateItemInputProps {
 	type: 'file' | 'folder'
@@ -17,6 +18,8 @@ export default function CreateItemInput({
 	onCancel,
 	depth,
 }: CreateItemInputProps) {
+	const { t } = useI18n()
+
 	return (
 		<div className="px-4 py-2 bg-gray-800" style={{ paddingLeft: `${depth * 12 + 16}px` }}>
 			<div className="flex items-center gap-2">
@@ -33,21 +36,21 @@ export default function CreateItemInput({
 						if (e.key === 'Enter') onConfirm()
 						if (e.key === 'Escape') onCancel()
 					}}
-					placeholder={type === 'folder' ? 'Folder name' : 'File name'}
+					placeholder={type === 'folder' ? t('files.folderName') : t('files.fileName')}
 					className="flex-1 px-2 py-1 text-sm bg-gray-700 text-gray-100 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
 					autoFocus
 				/>
 				<button
 					onClick={onConfirm}
 					className="p-1 hover:bg-gray-700 rounded"
-					title="Create"
+					title={t('files.create')}
 				>
 					<Check className="w-3 h-3 text-green-400" />
 				</button>
 				<button
 					onClick={onCancel}
 					className="p-1 hover:bg-gray-700 rounded"
-					title="Cancel"
+					title={t('files.cancel')}
 				>
 					<X className="w-3 h-3 text-red-400" />
 				</button>

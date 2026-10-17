@@ -15,6 +15,7 @@
 
 - 借助 Typst.ts 实现全客户端编译（wasm 文件随 [@myriaddreamin/typst-ts-web-compiler](https://www.npmjs.com/package/@myriaddreamin/typst-ts-web-compiler) 包发布，同步到本地 `public/wasm/` 使用）。
 - 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
+- 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
 ## 使用与部署
@@ -63,6 +64,20 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 [https://mapaor.github.io/typst-online-editor-static/](https://mapaor.github.io/typst-online-editor-static/)
 
 </details>
+
+## 界面语言（i18n）
+
+界面文案已国际化，首批支持简体中文、英语、德语。右上角地球图标旁的下拉框可切换语言，选择记入 `localStorage`（键 `typst-lang`），首次进入默认跟随浏览器语言。
+
+- 消息目录在 `src/lib/i18n/messages.ts`：`en` 为基础目录，它的键即 `MessageKey`，其它语言的目录类型为 `Messages`，缺少或拼错任何键都会让 `tsc` 失败。
+- 接口在 `src/lib/i18n/i18n.ts`（`I18n`：`lang` / `t()` / `setLang()`）。`t('files.count', { count })` 会填充 `{placeholder}` 占位符；当 `vars.count` 是数字时，按 `Intl.PluralRules` 选取 `<key>_<plural category>` 变体（如 `files.count_one`），该语言没有变体则回落到基础键。
+- 组件里用 `useI18n()` 取用，必须位于 `I18nProvider` 之下（`src/main.tsx` 已挂载）。
+
+新增语言的步骤：
+
+1. 在 `src/lib/i18n/messages.ts` 新增一个目录（照 `en` 逐键翻译，`tsc` 会校验完整性）。
+2. 在 `src/lib/i18n/i18n.ts` 的 `LANGS` 中加入语言码，并在 `LANG_LABELS` 中加入该语言的自称（如 `fr: 'Français'`，切换器里刻意不翻译）。
+3. 该语言有复数之分就补 `<key>_one` 等变体键；无复数变化的语言（如中文）与基础键保持一致即可。
 
 ## 致谢
 

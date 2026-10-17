@@ -1,4 +1,5 @@
 import { ZoomIn, ZoomOut, Maximize2, Minimize2, ChevronLeft, ChevronRight, X, Eye } from 'lucide-preact'
+import { useI18n } from '@/lib/i18n/useI18n'
 
 interface PdfToolbarProps {
 	pdfUrl: string | null
@@ -27,13 +28,14 @@ export default function PdfToolbar({
 	isCollapsed,
 	onToggleCollapse
 }: PdfToolbarProps) {
+	const { t } = useI18n()
 	if (isCollapsed) {
 		return (
 			<div className="h-full flex flex-col items-center justify-start bg-gray-800 border-l border-gray-700">
 				<button
 					onClick={onToggleCollapse}
 					className="p-3 hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
-					title="Show Preview"
+					title={t('preview.show')}
 				>
 					<Eye className="w-5 h-5" />
 				</button>
@@ -43,7 +45,7 @@ export default function PdfToolbar({
 	
 	return (
 		<div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-			<span className="text-sm text-gray-400 whitespace-nowrap">PDF Preview</span>
+			<span className="text-sm text-gray-400 whitespace-nowrap">{t('preview.title')}</span>
 			
 			{pdfUrl && (
 				<div className="flex items-center gap-3">
@@ -52,7 +54,7 @@ export default function PdfToolbar({
 						<button
 							onClick={onPrevPage}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-							title="Previous Page"
+							title={t('preview.prevPage')}
 							disabled={currentPage <= 1}
 						>
 							<ChevronLeft className="w-4 h-4" />
@@ -63,7 +65,7 @@ export default function PdfToolbar({
 						<button
 							onClick={onNextPage}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-							title="Next Page"
+							title={t('preview.nextPage')}
 							disabled={currentPage >= totalPages}
 						>
 							<ChevronRight className="w-4 h-4" />
@@ -77,7 +79,7 @@ export default function PdfToolbar({
 						<button
 							onClick={onZoomOut}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-							title="Zoom Out"
+							title={t('preview.zoomOut')}
 							disabled={zoom <= 100}
 						>
 							<ZoomOut className="w-4 h-4" />
@@ -85,14 +87,14 @@ export default function PdfToolbar({
 						<button
 							onClick={onZoomFit}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
-							title="Zoom to Fit"
+							title={t('preview.zoomToFit')}
 						>
 							<Minimize2 className="w-4 h-4" />
 						</button>
 						<button
 							onClick={onZoomIn}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-							title="Zoom In"
+							title={t('preview.zoomIn')}
 							disabled={zoom >= 200}
 						>
 							<ZoomIn className="w-4 h-4" />
@@ -106,7 +108,7 @@ export default function PdfToolbar({
 					<button
 						onClick={() => window.open(pdfUrl, '_blank')}
 						className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
-						title="Open in New Tab"
+						title={t('preview.openInNewTab')}
 					>
 						<Maximize2 className="w-4 h-4" />
 					</button>
@@ -115,7 +117,7 @@ export default function PdfToolbar({
 					<button
 						onClick={onToggleCollapse}
 						className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
-						title="Close Preview"
+						title={t('preview.close')}
 					>
 						<X className="w-4 h-4" />
 					</button>

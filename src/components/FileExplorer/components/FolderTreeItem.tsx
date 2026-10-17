@@ -1,5 +1,6 @@
 import type { ComponentChildren, TargetedDragEvent } from 'preact'
 import { Folder, ChevronRight, ChevronDown, Edit2, Trash2, Check, X } from 'lucide-preact'
+import { useI18n } from '@/lib/i18n/useI18n'
 import type { FileNode } from '../types'
 
 interface FolderTreeItemProps {
@@ -43,6 +44,7 @@ export default function FolderTreeItem({
 	onExternalDrop,
 	children,
 }: FolderTreeItemProps) {
+	const { t } = useI18n()
 	const folderName = node.path.split('/').pop() || node.path
 
 	if (isRenaming) {
@@ -62,10 +64,10 @@ export default function FolderTreeItem({
 							className="flex-1 px-2 py-1 text-sm bg-gray-700 text-gray-100 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
 							autoFocus
 						/>
-						<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title="Rename">
+						<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.rename')}>
 							<Check className="w-3 h-3 text-green-400" />
 						</button>
-						<button onClick={onCancelRename} className="p-1 hover:bg-gray-700 rounded" title="Cancel">
+						<button onClick={onCancelRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.cancel')}>
 							<X className="w-3 h-3 text-red-400" />
 						</button>
 					</div>
@@ -119,7 +121,7 @@ export default function FolderTreeItem({
 							onStartRename()
 						}}
 						className="p-1 hover:bg-gray-600 rounded"
-						title="Rename folder"
+						title={t('files.renameFolder')}
 					>
 						<Edit2 className="w-3 h-3 text-gray-300" />
 					</button>
@@ -129,7 +131,7 @@ export default function FolderTreeItem({
 							onDelete()
 						}}
 						className="p-1 hover:bg-red-900/50 rounded"
-						title="Delete folder"
+						title={t('files.deleteFolder')}
 					>
 						<Trash2 className="w-3 h-3 text-red-400" />
 					</button>
