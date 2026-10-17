@@ -81,7 +81,25 @@ const CORE_FONTS: string[] = [
 	'/fonts/IBMPlexSans-Bold.ttf',
 	// Math fonts (Critical for mathematical formulas)
 	'/fonts/NewCMMath-Regular.otf',
-	'/fonts/NewCMMath-Book.otf'
+	'/fonts/NewCMMath-Book.otf',
+	// Typst's default text font set (serif body, mono, NewCM10). Self-hosted copies of the
+	// fonts typst.ts would otherwise download from cdn.jsdelivr.net via loadFonts'
+	// `assets: ['text']`. Keep these local: compiler.init hangs while the CDN is unreachable.
+	'/fonts/DejaVuSansMono.ttf',
+	'/fonts/DejaVuSansMono-Bold.ttf',
+	'/fonts/DejaVuSansMono-Oblique.ttf',
+	'/fonts/DejaVuSansMono-BoldOblique.ttf',
+	'/fonts/LibertinusSerif-Regular.otf',
+	'/fonts/LibertinusSerif-Bold.otf',
+	'/fonts/LibertinusSerif-Italic.otf',
+	'/fonts/LibertinusSerif-BoldItalic.otf',
+	'/fonts/LibertinusSerif-Semibold.otf',
+	'/fonts/LibertinusSerif-SemiboldItalic.otf',
+	'/fonts/NewCM10-Regular.otf',
+	'/fonts/NewCM10-Bold.otf',
+	'/fonts/NewCM10-Italic.otf',
+	'/fonts/NewCM10-BoldItalic.otf',
+	'/fonts/NewCMMath-Bold.otf'
 ];
 
 const EMOJI_FONTS: string[] = [
@@ -151,9 +169,10 @@ async function createCompilerWithFonts(fonts: string[]): Promise<TypstCompiler> 
 	await compiler.init({
 		getModule: fetchWasmModule,
 		beforeBuild: [
-			loadFonts(absoluteFonts, {
-				assets: ['text']
-			}),
+			// `assets: false` is required: with no options, TypstCompiler.init() appends a
+			// default font loader ({assets: ['text']}) that downloads typst's default font
+			// set from cdn.jsdelivr.net and hangs init when the CDN is unreachable.
+			loadFonts(absoluteFonts, { assets: false }),
 			withAccessModel(accessModel),
 			withPackageRegistry(packageRegistry)
 		]

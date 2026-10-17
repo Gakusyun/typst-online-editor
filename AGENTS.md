@@ -32,7 +32,7 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
 |`public/wasm/`|28 MB Typst WASM binary, **checked into git**; must match the installed `@myriaddreamin` version (see Known Quirks)|
-|`public/fonts/`|IBM Plex, NewCM Math (core); Noto CJK + NotoColorEmoji (lazy, content-detected)|
+|`public/fonts/`|IBM Plex, DejaVu Mono, Libertinus Serif, NewCM (core, incl. Typst's default text set — self-hosted, never load from CDN); Noto CJK + NotoColorEmoji (lazy, content-detected)|
 |`public/textmate-sintax/`|Typst TextMate grammar for Shiki — spelling is *sic*, don't "fix" it|
 
 ## Development Commands
@@ -101,6 +101,5 @@ If tests are ever added, the hard-to-test surfaces are: the worker + WASM bounda
 - The commented "OPTION 1" CDN block in `typst.worker.ts` contains a broken string literal — don't copy it verbatim.
 - `main.typ` protections are literal string checks (`path === 'main.typ'`), not `project.mainFile`.
 - Folder detection = "path has no dot" — extension-less files are treated as folders by rename/delete.
-- A compile fires on `TEMP_PROJECT` at mount before the stored project loads (compiles twice).
 - Dead code: `resetCompiler()` in the worker (no message invokes it), `PdfPreviewProps.fileCount/charCount` (never used), `ProjectStorage.getStorageSize`/`isStorageNearLimit` (no call sites).
 - Build noise (pre-existing): `[INEFFECTIVE_DYNAMIC_IMPORT]` — `shiki` is both statically and dynamically imported in `CodeEditor.tsx`; and a wasm-bindgen "deprecated parameters" console warning comes from typst.ts's own `wasm-pack-shim`.
