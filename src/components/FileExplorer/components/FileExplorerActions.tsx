@@ -9,6 +9,9 @@ interface FileExplorerActionsProps {
 	onExportProject: () => void
 }
 
+/**
+ * Icon-only action row; the visible label lives in each button's tooltip.
+ */
 export default function FileExplorerActions({
 	onCreateFile,
 	onCreateFolder,
@@ -19,39 +22,37 @@ export default function FileExplorerActions({
 	const zipInputRef = useRef<HTMLInputElement>(null)
 
 	return (
-		<div className="p-4 border-t border-gray-700 space-y-2">
-			<button
-				onClick={onCreateFile}
-				className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-				title={t('files.newFile')}
-			>
-				<FilePlus className="w-4 h-4" />
-				{t('files.newFile')}
-			</button>
-			<button
-				onClick={onCreateFolder}
-				className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-600 transition-colors"
-				title={t('files.newFolder')}
-			>
-				<FolderPlus className="w-4 h-4" />
-				{t('files.newFolder')}
-			</button>
-			<button
-				onClick={() => zipInputRef.current?.click()}
-				className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-600 transition-colors"
-				title={t('files.importProject')}
-			>
-				<Upload className="w-4 h-4" />
-				{t('files.importProject')}
-			</button>
-			<button
-				onClick={onExportProject}
-				className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-600 transition-colors"
-				title={t('files.exportProject')}
-			>
-				<Download className="w-4 h-4" />
-				{t('files.exportProject')}
-			</button>
+		<div className="p-2 border-t border-gray-700">
+			<div className="flex items-center gap-2">
+				<button
+					onClick={onCreateFile}
+					className="flex-1 flex items-center justify-center p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+					title={t('files.newFile')}
+				>
+					<FilePlus className="w-4 h-4" />
+				</button>
+				<button
+					onClick={onCreateFolder}
+					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
+					title={t('files.newFolder')}
+				>
+					<FolderPlus className="w-4 h-4" />
+				</button>
+				<button
+					onClick={() => zipInputRef.current?.click()}
+					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
+					title={t('files.importProject')}
+				>
+					<Upload className="w-4 h-4" />
+				</button>
+				<button
+					onClick={onExportProject}
+					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
+					title={t('files.exportProject')}
+				>
+					<Download className="w-4 h-4" />
+				</button>
+			</div>
 			<input
 				ref={zipInputRef}
 				type="file"

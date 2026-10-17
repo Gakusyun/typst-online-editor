@@ -76,19 +76,19 @@ export default function TypstEditorHeader({
 	}
 
 	return (
-		<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700">
+		<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 px-4 py-1.5 bg-gray-800 border-b border-gray-700">
 			<div className="flex items-center gap-4">
 				<div className="flex flex-row items-center gap-2 md:justify-start md:w-auto justify-between w-full">
-					<h1 className="text-xl font-semibold">Typst Online Editor</h1>
+					<h1 className="text-base font-semibold">Typst Online Editor</h1>
 					{isMobile && (
 						<a
 							href="https://github.com/Gakusyun/typst-online-editor"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
+							className="p-1.5 text-white rounded hover:bg-gray-600 transition-transform duration-200"
 							title={t('header.viewOnGithub')}
 						>
-							<Github className="w-5 h-5" />
+							<Github className="w-4 h-4" />
 						</a>
 					)}
 				</div>
@@ -97,10 +97,10 @@ export default function TypstEditorHeader({
 							href="https://github.com/Gakusyun/typst-online-editor"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="p-2 text-white rounded hover:bg-gray-600 transition-transform duration-200"
+							className="p-1.5 text-white rounded hover:bg-gray-600 transition-transform duration-200"
 							title={t('header.viewOnGithub')}
 						>
-						<Github className="w-5 h-5" />
+						<Github className="w-4 h-4" />
 						</a>
 					)}
 			</div>
@@ -110,7 +110,7 @@ export default function TypstEditorHeader({
 				</div>
 				{!isMobile && (
 					<button
-						className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${isMobile ? 'text-xs' : ''}`}
+						className={`px-2.5 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${isMobile ? 'text-xs' : ''}`}
 						onClick={onCompileNow}
 						disabled={status === 'compiling'}
 					>
@@ -119,7 +119,7 @@ export default function TypstEditorHeader({
 				)}
 				{pdfUrl && (
 					<button
-						className={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 ${isMobile ? 'text-xs' : ''} text-nowrap`}
+						className={`px-2.5 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 ${isMobile ? 'text-xs' : ''} text-nowrap`}
 						onClick={onDownload}
 					>
 						{t('header.downloadPdf')}
@@ -127,10 +127,10 @@ export default function TypstEditorHeader({
 				)}
 				<button
 					onClick={onOpenSettings}
-					className="p-2 text-white rounded hover:bg-gray-600 transition-colors"
+					className="p-1.5 text-white rounded hover:bg-gray-600 transition-colors"
 					title={t('settings.title')}
 				>
-					<Settings className="w-5 h-5" />
+					<Settings className="w-4 h-4" />
 				</button>
 			</div>
 		</div>
