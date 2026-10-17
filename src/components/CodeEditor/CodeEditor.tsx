@@ -1,175 +1,242 @@
-
-import { useEffect, useState, useRef } from 'preact/hooks'
-import { createHighlighter, type Highlighter } from 'shiki'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { EditorState, type Extension } from '@codemirror/state'
+import {
+	EditorView,
+	crosshairCursor,
+	drawSelection,
+	dropCursor,
+	highlightActiveLine,
+	highlightActiveLineGutter,
+	highlightSpecialChars,
+	keymap,
+	lineNumbers,
+	placeholder as cmPlaceholder,
+	rectangularSelection,
+} from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
+import {
+	autocompletion,
+	closeBrackets,
+	closeBracketsKeymap,
+	completionKeymap,
+} from '@codemirror/autocomplete'
+import {
+	LanguageSupport,
+	StreamLanguage,
+	bracketMatching,
+	foldGutter,
+	foldKeymap,
+	indentOnInput,
+} from '@codemirror/language'
+import { lintGutter, lintKeymap } from '@codemirror/lint'
+import { LSPClient, languageServerExtensions } from '@codemirror/lsp-client'
+import { typst_lezer, typstLezerLinter } from 'codemirror-lang-typst/lezer'
+import { markdown } from '@codemirror/lang-markdown'
+import { json } from '@codemirror/lang-json'
+import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { useI18n } from '@/lib/i18n/useI18n'
+import { TinymistLspClient, type TinymistLspStatus } from '@/lib/lsp/tinymistClient'
+import { ProjectWorkspace, pathToUri } from '@/lib/lsp/projectWorkspace'
+import type { Project } from '@/lib/storage/ProjectStorage'
+import { editorHighlighting, editorTheme } from './theme'
 
 interface CodeEditorProps {
-	filePath: string
-	content: string
+	project: Project
+	activeFilePath: string
 	onChange: (content: string) => void
+	onFileSelect: (path: string) => void
 }
 
-export default function CodeEditor({ filePath, content, onChange }: CodeEditorProps) {
-	const { t } = useI18n()
-	const [highlightedCode, setHighlightedCode] = useState('')
-	const [isInitializing, setIsInitializing] = useState(false)
-	const highlighterRef = useRef<Highlighter | null>(null)
-	
-	// Detect file types
-	const fileExtension = filePath.split('.').pop()?.toLowerCase() || ''
-	const isTypFile = filePath.endsWith('.typ')
-	const isMarkdownFile = ['md', 'mdx'].includes(fileExtension)
-	const isJsonFile = fileExtension === 'json'
-	const isYamlFile = ['yaml', 'yml'].includes(fileExtension)
-	const isCsvFile = fileExtension === 'csv'
-	const isTomlFile = fileExtension === 'toml'
-	const isDatFile = fileExtension === 'dat' // We'll treat .dat files as .txt (plain text)
-	const needsHighlighting = isTypFile || isMarkdownFile || isJsonFile || isYamlFile || isCsvFile || isTomlFile
-	
-	// Detect binary file types
-	const isImageFile = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension)
-	const isFontFile = ['ttf', 'otf', 'woff', 'woff2'].includes(fileExtension)
-	const isBinaryFile = isImageFile || isFontFile
-	
-	const getBinaryMessage = () => {
-		if (isImageFile) return t('editor.imageContent')
-		if (isFontFile) return t('editor.fontContent')
-		return ''
-	}
+const IMAGE_FILES = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+const FONT_FILES = ['ttf', 'otf', 'woff', 'woff2']
 
-	// Initialize highlighter once with all languages we'll ever need
+function baseExtensions(placeholderText: string): Extension[] {
+	return [
+		lineNumbers(),
+		highlightActiveLineGutter(),
+		highlightSpecialChars(),
+		history(),
+		foldGutter(),
+		drawSelection(),
+		dropCursor(),
+		EditorState.allowMultipleSelections.of(true),
+		indentOnInput(),
+		bracketMatching(),
+		closeBrackets(),
+		autocompletion(),
+		rectangularSelection(),
+		crosshairCursor(),
+		highlightActiveLine(),
+		highlightSelectionMatches(),
+		search({ top: true }),
+		cmPlaceholder(placeholderText),
+		keymap.of([
+			...closeBracketsKeymap,
+			...defaultKeymap,
+			...searchKeymap,
+			...historyKeymap,
+			...foldKeymap,
+			...completionKeymap,
+			...lintKeymap,
+			indentWithTab,
+		]),
+	]
+}
+
+function languageExtensions(path: string): Extension[] {
+	const ext = path.split('.').pop()?.toLowerCase() ?? ''
+	if (path.endsWith('.typ')) return [typstLanguage()]
+	if (ext === 'md' || ext === 'mdx') return [markdown()]
+	if (ext === 'json') return [json()]
+	if (ext === 'yaml' || ext === 'yml') return [StreamLanguage.define(yaml)]
+	if (ext === 'toml') return [StreamLanguage.define(toml)]
+	return []
+}
+
+/**
+ * `typst_lezer()` bundles its own Lezer-based `linter()`, which writes
+ * diagnostics through `setDiagnostics` and would therefore replace the LSP's
+ * diagnostics (last writer wins). LSP diagnostics are authoritative here, so
+ * rebuild the support bundle without the Lezer linter.
+ */
+function typstLanguage(): LanguageSupport {
+	const support = typst_lezer()
+	const raw = support.support
+	const parts = Array.isArray(raw) ? raw.filter((part) => part !== typstLezerLinter) : []
+	return new LanguageSupport(support.language, parts)
+}
+
+export default function CodeEditor({
+	project,
+	activeFilePath,
+	onChange,
+	onFileSelect,
+}: CodeEditorProps) {
+	const { t } = useI18n()
+	const hostRef = useRef<HTMLDivElement | null>(null)
+	const viewRef = useRef<EditorView | null>(null)
+	const lspRef = useRef<TinymistLspClient | null>(null)
+	const lspClientRef = useRef<LSPClient | null>(null)
+	const workspaceRef = useRef<ProjectWorkspace | null>(null)
+	const projectRef = useRef(project)
+	const onChangeRef = useRef(onChange)
+	const onFileSelectRef = useRef(onFileSelect)
+	const [lspStatus, setLspStatus] = useState<TinymistLspStatus>('loading')
+
+	projectRef.current = project
+	onChangeRef.current = onChange
+	onFileSelectRef.current = onFileSelect
+
+	const fileExtension = activeFilePath.split('.').pop()?.toLowerCase() || ''
+	const isImageFile = IMAGE_FILES.includes(fileExtension)
+	const isFontFile = FONT_FILES.includes(fileExtension)
+	const isBinaryFile = isImageFile || isFontFile
+	const activeFile = project.files.find((file) => file.path === activeFilePath)
+	const content = activeFile?.content ?? ''
+	const isTypstFile = activeFilePath.endsWith('.typ')
+
+	// The language server lives for the whole editor session; the view is
+	// recreated when the active file changes.
 	useEffect(() => {
-		if (!highlighterRef.current) {
-			setIsInitializing(true)
-			const initHighlighter = async () => {
-				try {
-					// Load all languages we'll need
-					const { bundledLanguages } = await import('shiki')
-					const publicBasePath = import.meta.env.BASE_URL.replace(/\/$/, '')
-					const response = await fetch(`${publicBasePath}/textmate-sintax/typst.tmLanguage.json`)
-					const typstGrammar = await response.json()
-					
-					highlighterRef.current = await createHighlighter({
-						langs: [
-							{
-								name: 'typst',
-								scopeName: 'source.typst',
-								...typstGrammar
-							},
-							bundledLanguages.markdown,
-							bundledLanguages.json,
-							bundledLanguages.yaml,
-							bundledLanguages.csv,
-							bundledLanguages.toml
-						],
-						themes: ['github-dark']
-					})
-				} catch (error) {
-					console.error('Failed to initialize highlighter:', error)
-				} finally {
-					setIsInitializing(false)
-				}
-			}
-			initHighlighter()
+		const tinymist = new TinymistLspClient()
+		const client = new LSPClient({
+			rootUri: 'file:///',
+			// The wasm language server downloads from a CDN on first use; give
+			// the initialization exchange enough time for a cold load.
+			timeout: 60_000,
+			extensions: languageServerExtensions(),
+			workspace: (owner) => {
+				const workspace = new ProjectWorkspace(owner, {
+					getFiles: () => projectRef.current.files,
+					onNavigate: (path) => onFileSelectRef.current(path),
+				})
+				workspaceRef.current = workspace
+				return workspace
+			},
+		})
+		workspaceRef.current?.applyProject(projectRef.current.files)
+		client.connect(tinymist.transport)
+		const unsubscribe = tinymist.onStatus((status) => setLspStatus(status))
+		lspRef.current = tinymist
+		lspClientRef.current = client
+		return () => {
+			unsubscribe()
+			client.disconnect()
+			tinymist.dispose()
+			lspRef.current = null
+			lspClientRef.current = null
+			workspaceRef.current = null
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
-	// Highlight code immediately
 	useEffect(() => {
-		if (needsHighlighting && highlighterRef.current && !isInitializing) {
-			if (!content) {
-				// Clear highlighting when content is empty
-				setHighlightedCode('')
-				return
-			}
-			
-			try {
-				let lang = 'markdown'
-				if (isTypFile) lang = 'typst'
-				else if (isJsonFile) lang = 'json'
-				else if (isYamlFile) lang = 'yaml'
-				else if (isCsvFile) lang = 'csv'
-				else if (isTomlFile) lang = 'toml'
-				
-				const html = highlighterRef.current.codeToHtml(content, {
-					lang,
-					theme: 'github-dark',
-				})
-				// Remove background color from generated HTML
-				const cleanedHtml = html.replace(/background-color:[^;"]*/g, '')
-				setHighlightedCode(cleanedHtml)
-			} catch (error) {
-				console.error('Syntax highlighting error:', error)
-				setHighlightedCode('')
-			}
-		} else if (!needsHighlighting) {
-			// Clear highlighting for non-highlighted files
-			setHighlightedCode('')
+		workspaceRef.current?.applyProject(project.files)
+	}, [project])
+
+	useEffect(() => {
+		if (isBinaryFile || !hostRef.current) return
+		const client = lspClientRef.current
+		const extensions: Extension[] = [
+			...baseExtensions(t('editor.typeHere')),
+			...languageExtensions(activeFilePath),
+			editorTheme,
+			editorHighlighting,
+			EditorView.updateListener.of((update) => {
+				if (update.docChanged) onChangeRef.current(update.state.doc.toString())
+			}),
+		]
+		if (isTypstFile && client) {
+			extensions.push(lintGutter(), client.plugin(pathToUri(activeFilePath), 'typst'))
 		}
-	}, [content, needsHighlighting, isTypFile, isInitializing])
+		const view = new EditorView({
+			state: EditorState.create({ doc: content, extensions }),
+			parent: hostRef.current,
+		})
+		viewRef.current = view
+		return () => {
+			// Flush pending edits of the old file before its plugin goes away.
+			lspClientRef.current?.sync()
+			view.destroy()
+			viewRef.current = null
+		}
+		// content is read from the project snapshot at (re)creation time; later
+		// external edits are applied by the sync effect below.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [activeFilePath, isBinaryFile, isTypstFile])
+
+	// Apply externally-driven content changes (import, undo via storage, …).
+	useEffect(() => {
+		const view = viewRef.current
+		if (!view || isBinaryFile) return
+		if (view.state.doc.toString() !== content) {
+			view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } })
+		}
+	}, [content, isBinaryFile])
+
+	const lspStatusText =
+		isTypstFile && lspStatus === 'loading'
+			? t('editor.lspLoading')
+			: isTypstFile && lspStatus === 'error'
+				? t('editor.lspUnavailable')
+				: ''
 
 	return (
 		<div className="flex flex-col h-full border-r border-gray-700">
-			<div className="px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm text-gray-400">
-				{filePath}
+			<div className="px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm text-gray-400 flex items-center justify-between gap-3">
+				<span className="truncate">{activeFilePath}</span>
+				{lspStatusText && <span className="shrink-0 text-xs">{lspStatusText}</span>}
 			</div>
-			
-			<div className="flex-1 overflow-auto overflow-x-hidden">
-				{/* Loading indicator */}
-				{needsHighlighting && isInitializing && (
-					<div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm z-10">
-						{t('editor.initializingHighlighter')}
+
+			<div className="flex-1 overflow-hidden">
+				{isBinaryFile ? (
+					<div className="p-4 font-mono text-sm" style={{ color: '#fbbf24' }}>
+						{isImageFile ? t('editor.imageContent') : t('editor.fontContent')}
 					</div>
+				) : (
+					<div ref={hostRef} className="h-full overflow-hidden" />
 				)}
-				
-				<div className="relative min-h-full">
-					{/* Base layer - always present, defines layout */}
-					<pre 
-						className="m-0 p-0 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words"
-						style={{ 
-							tabSize: 4,
-							lineHeight: '1.625',
-							letterSpacing: '0',
-							color: 'transparent',
-							minHeight: '100%',
-							paddingBottom: '100vh', // Ensures pre extends to fill viewport
-						}}
-						aria-hidden="true"
-					>
-						<code className="block p-4">
-							{isBinaryFile ? (
-								getBinaryMessage()
-							) : needsHighlighting && highlightedCode ? (
-								<span dangerouslySetInnerHTML={{ __html: highlightedCode }} />
-							) : (
-								content
-							)}
-						</code>
-					</pre>
-					
-					{/* Textarea overlay - always positioned on top, fills entire container */}
-					<textarea
-						className="absolute inset-0 w-full p-4 m-0 font-mono text-sm resize-none focus:outline-none leading-relaxed whitespace-pre-wrap break-words border-0 cursor-text overflow-hidden box-border"
-						style={{ 
-							tabSize: 4,
-							color: isBinaryFile ? '#fbbf24' : (needsHighlighting && highlightedCode && !isInitializing ? 'transparent' : 'white'),
-							caretColor: isBinaryFile ? '#fbbf24' : 'white',
-							background: 'transparent',
-							lineHeight: '1.625',
-							letterSpacing: '0',
-							WebkitTextFillColor: isBinaryFile ? '#fbbf24' : (needsHighlighting && highlightedCode && !isInitializing ? 'transparent' : 'white'),
-							wordWrap: 'break-word',
-							minHeight: '100%',
-							height: 'auto'
-						}}
-						value={isBinaryFile ? getBinaryMessage() : content}
-						onInput={(e) => onChange(e.currentTarget.value)}
-						placeholder={t('editor.typeHere')}
-						spellcheck={false}
-						readOnly={isBinaryFile}
-					/>
-				</div>
 			</div>
 		</div>
 	)

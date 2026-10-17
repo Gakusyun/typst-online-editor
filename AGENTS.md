@@ -4,15 +4,15 @@
 
 Lightweight web-based Typst editor: compiles Typst → PDF **entirely in the browser** (Typst.ts WASM compiler in a Web Worker), renders the preview with pdf.js. No backend. Fork of [Mapaor/typst-online-editor](https://github.com/Mapaor/typst-online-editor) (`README.upstream.md` is the upstream English README, kept verbatim; `README.md` — the live doc — is Simplified Chinese, keep it that way).
 
-Licensing: repo code MIT (`LICENSE` = this fork, `LICENSE.upstream` = upstream MIT grant); bundled `@myriaddreamin/*` and `pdfjs-dist` are Apache-2.0.
+Licensing: repo code MIT (`LICENSE` = this fork, `LICENSE.upstream` = upstream MIT grant); bundled `@myriaddreamin/*`, `pdfjs-dist`, and `codemirror-lang-typst` are Apache-2.0; the Tinymist WASM language server is Apache-2.0 (loaded from CDN, never bundled).
 
-Stack: Preact 11 · Vite 8 (rolldown) · TypeScript 7 (`strict`) · Tailwind v4 (`@tailwindcss/vite`) · Shiki 4 · pdfjs-dist 6 · `@myriaddreamin/typst.ts` 0.7.0. Package manager: **pnpm** (`pnpm-lock.yaml` is the only lockfile).
+Stack: Preact 11 · Vite 8 (rolldown) · TypeScript 7 (`strict`) · Tailwind v4 (`@tailwindcss/vite`) · CodeMirror 6 + `codemirror-lang-typst` · Tinymist WASM LSP (`@codemirror/lsp-client`) · pdfjs-dist 6 · `@myriaddreamin/typst.ts` 0.7.0. Package manager: **pnpm** (`pnpm-lock.yaml` is the only lockfile).
 
 ## Architecture & Data Flow
 
 Compile pipeline — every link is load-bearing; changing one means checking the whole chain:
 
-1. **Edit** — `CodeEditor.tsx` (transparent `<textarea>` over a Shiki-highlighted `<pre>`; live text is wired via **`onInput`**, see Preact idioms) → `TypstEditor.tsx` → `useProjectFileOperations.updateActiveFileContent` → `useProjectState.saveProject` (localStorage via the `projectStorage` singleton).
+1. **Edit** — `CodeEditor.tsx` (CodeMirror 6: `typst_lezer()` syntax from `codemirror-lang-typst`, plus `@codemirror/lsp-client` bound to the Tinymist WASM LSP in `src/lib/lsp/`) → `TypstEditor.tsx` → `useProjectFileOperations.updateActiveFileContent` → `useProjectState.saveProject` (localStorage via the `projectStorage` singleton).
 2. **Trigger** — `useProjectState`'s `useEffect([currentProject, onProjectChange])` reduces `Project.files` to `Record<string, string>` → `useTypstCompiler.compileDebounced` (1000 ms `debounce` from `src/lib/utils/helpers.ts`).
 3. **Service** — `src/lib/typst/TypstCompilerService.compile()` splits text files from `data:`-URL binaries (images **and** fonts) and calls `TypstWorkerClient.compilePdf()`.
 4. **Worker** — `src/lib/typst/typst.worker.ts` owns all WASM/compiler lifecycle: fetches the compiler wasm and fonts **from CDN mirrors only** (jsdmirror; nothing is self-hosted in `public/`, so compiling needs network access), lazily upgrades the compiler with emoji/CJK fonts based on content regexes, injects user `.ttf/.otf` uploads via `mapShadow`, resolves Typst Universe packages (`FetchPackageRegistry`), serializes jobs through `compileQueue`.
@@ -26,13 +26,13 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 |Path|Purpose|
 |---|---|
 |`index.html`, `src/main.tsx`|Vite entry: `index.html` mounts `#app`, `main.tsx` imports global CSS and renders `I18nProvider` > `TypstEditor`|
-|`src/styles/`|`globals.css` (Tailwind import + Shiki wrap override) and the pdf.js `textlayer`/`annotationlayer` CSS|
-|`src/components/`|`TypstEditor/` (orchestrator + header + `SettingsDialog` + hooks), `CodeEditor/` (Shiki + textarea), `FileExplorer/` (virtual folder tree), `PDFViewer/` (canvas preview)|
+|`src/styles/`|`globals.css` (Tailwind import) and the pdf.js `textlayer`/`annotationlayer` CSS|
+|`src/components/`|`TypstEditor/` (orchestrator + header + `SettingsDialog` + hooks), `CodeEditor/` (CodeMirror 6 editor + `theme.ts`), `FileExplorer/` (virtual folder tree), `PDFViewer/` (canvas preview)|
 |`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM), `fonts.ts` (CDN font config + `SUPPORTED_FONT_FAMILIES` manifest)|
+|`src/lib/lsp/`|Tinymist WASM LSP: `tinymist.ts` (CDN loader + wasm types), `tinymist.worker.ts` (LSP bridge, diagnostics filter, package resolution), `tinymistClient.ts` (worker + CodeMirror `Transport`), `projectWorkspace.ts` (multi-file LSP workspace)|
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
 |`src/lib/i18n/`|UI strings + `I18n` contract: `messages.ts` (zh/en/de catalogs), `i18n.ts` (`Lang`, `I18n`, `translate`), `useI18n.ts`, `I18nProvider.tsx`|
-|`public/textmate-sintax/`|Typst TextMate grammar for Shiki — spelling is *sic*, don't "fix" it|
 
 ## Development Commands
 
@@ -55,7 +55,7 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - **Error handling** — `try/catch` + `console.error/warn`; normalize with `error instanceof Error ? error.message : String(error)`. User-visible errors only via `errorMsg` state (rendered in `PdfPlaceholder.tsx`) or sparing `alert()`/`confirm()`. Compile outcomes are `CompileResult {success, error?}`, not a Result type.
 - **Async** — worker RPC correlates `crypto.randomUUID()` ids through a `#pending` Map; FIFO `compileQueue` in the worker; `compileSeq` supersede guard drops stale compiles silently; debounce with `.cancel()` (cancelling does not abort an in-flight worker job).
 - **State updates** — rebuild `Project` immutably; `lastModified: 0` on edits is deliberate (`ProjectStorage.save` stamps only falsy timestamps).
-- **Styling** — Tailwind v4 utilities in JSX (CSS-first config: `@import "tailwindcss"`, **no** `tailwind.config.*`; Tailwind runs through the `@tailwindcss/vite` plugin, no PostCSS config). Inline `style` only for dynamic sizing; `src/styles/globals.css` holds the Shiki `pre-wrap` override. Icons: `lucide-preact`.
+- **Styling** — Tailwind v4 utilities in JSX (CSS-first config: `@import "tailwindcss"`, **no** `tailwind.config.*`; Tailwind runs through the `@tailwindcss/vite` plugin, no PostCSS config). Inline `style` only for dynamic sizing. Icons: `lucide-preact`. CodeMirror theming lives in `CodeEditor/theme.ts` (github-dark palette).
 - **Typing** — `strict: true`; typed arrays as `Uint8Array<ArrayBuffer>` (TS ≥ 5.7 feature); `as unknown as` casts allowed where `pdfjs-dist`/worker typings are wrong — keep the explanatory comments. TypeScript 7 has **no JS compiler API**, which is why the lint toolchain is oxlint, not typescript-eslint.
 
 **Recipe — add fonts:** add the CDN URL (base in `FONT_CDN_BASE`) to `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `src/lib/typst/fonts.ts`, and the family name to `SUPPORTED_FONT_FAMILIES` (shown in the Settings dialog) — fonts are CDN-only, nothing is self-hosted in `public/`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
@@ -67,6 +67,8 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - `index.html`, `src/main.tsx` — app entry points.
 - `src/lib/typst/typst.worker.ts` — WASM + font + package resolution; heaviest file in the repo.
 - `src/lib/typst/TypstCompilerService.ts` — public compile API (`addListener`, `compile`, `getCurrentPdfUrl`, `dispose`).
+- `src/lib/lsp/tinymist.worker.ts` — Tinymist WASM LSP host: message bridge, diagnostics filter, package prefetch.
+- `src/components/CodeEditor/CodeEditor.tsx` — CodeMirror 6 editor; owns the LSP client/workspace lifecycle.
 - `src/components/TypstEditor/TypstEditor.tsx` — wiring point for all UI ↔ compiler flows.
 - `vite.config.ts` — `@preact/preset-vite`, `@tailwindcss/vite`, `@` → `src` alias. Subpath deploys use the `--base` CLI flag, not config edits.
 - `tsconfig.json` — `strict`, `jsx: react-jsx` + `jsxImportSource: preact`, `types: ["vite/client", "node"]`, `@/*` alias; the compiler wasm is fetched from the CDN pin at runtime, never imported by the bundler.
@@ -89,16 +91,17 @@ pnpm exec tsc --noEmit
 pnpm build   # runs tsc --noEmit + vite build
 ```
 
-`pnpm lint` runs **oxlint** with zero config (`oxlint src`; ESLint/typescript-eslint are gone — TS 7 ships no compiler API for them to parse with). Expect two pre-existing `no-unused-vars` warnings (`CodeEditor.tsx`'s `isDatFile`, `resetCompiler` in the worker) — they predate the Preact migration.
+`pnpm lint` runs **oxlint** with zero config (`oxlint src`; ESLint/typescript-eslint are gone — TS 7 ships no compiler API for them to parse with). Expect one pre-existing `no-unused-vars` warning (`resetCompiler` in the worker) — it predates the Preact migration.
 
 If tests are ever added, the hard-to-test surfaces are: the worker + WASM boundary (`typstClient.ts` uses `new Worker(new URL('./typst.worker.ts', import.meta.url), {type: 'module'})`), localStorage with SSR guards (`ProjectStorage.ts`), and canvas rendering (`usePdfRenderer.ts`). Easiest pure-logic units: `src/components/FileExplorer/utils/buildFileTree.ts`, `src/lib/utils/helpers.ts`. Prefer a throwaway smoke script over wiring tests.
 
 ## Known Quirks
 
-- `public/textmate-sintax/` is misspelled (*sic*) — `CodeEditor.tsx`'s fetch path depends on it.
 - **`TYPST_WASM_CDN_URL` in `typst.worker.ts` must match the installed `@myriaddreamin/typst.ts` version.** After upgrading `@myriaddreamin/*`, bump the pin (`typst-ts-web-compiler@0.7.0`); a mismatch surfaces at compile time as `wasm.__wasm_bindgen_func_elem_N is not a function`.
-- All compiler assets are **CDN-only**: wasm/fonts via `cdn.jsdmirror.com` (`typst.worker.ts`), pdf.js worker via `registry.npmmirror.com` (`src/lib/pdf/pdfjs.ts`). There is **no local fallback** — the app cannot compile offline, and CDN downloads are plain `fetch` with no timeout bound. Pinned CDN refs (`typst-ts-web-compiler@0.7.0`, `typst-assets@v0.13.1`, `typst-dev-assets@v0.13.1`, `noto-cjk@main`, `noto-emoji@v2.047`) must be bumped alongside upgrades.
+- All compiler assets are **CDN-only**: wasm/fonts via `cdn.jsdmirror.com` (`typst.worker.ts`), pdf.js worker via `registry.npmmirror.com` (`src/lib/pdf/pdfjs.ts`), Tinymist LSP wasm via `cdn.jsdmirror.com` (`src/lib/lsp/tinymist.ts`). There is **no local fallback** — the app cannot compile offline, and CDN downloads are plain `fetch` with no timeout bound. Pinned CDN refs (`typst-ts-web-compiler@0.7.0`, `typst-assets@v0.13.1`, `typst-dev-assets@v0.13.1`, `noto-cjk@main`, `noto-emoji@v2.047`, `shiki-tinymist@0.1.0`) must be bumped alongside upgrades. The Tinymist pin is a third-party wasm-pack build of tinymist 0.14.18 (published inside `shiki-tinymist`); its JS glue and `tinymist_bg.wasm` **must come from the same build**.
+- **Tinymist LSP quirks** (see `src/lib/lsp/tinymist.worker.ts`): the wasm server must not be re-entered from its `sendRequest`/`sendEvent` callbacks (defer replies/event pumping to a microtask or it panics on a wasm borrow); its analysis world cannot load fonts (the wasm build embeds text fonts but no math font), so the vacuous `no font could be found` error on math is filtered out of `publishDiagnostics`; Typst Universe packages are prefetched in `resolveFn` and published as memory documents, then recompiles are nudged once the tarball lands.
+- `codemirror-lang-typst`'s `typst_lezer()` bundles its own Lezer `linter()`; `@codemirror/lint`'s `setDiagnostics` is last-writer-wins, so that linter would wipe LSP diagnostics — `CodeEditor.tsx` rebuilds the `LanguageSupport` without it (`typstLanguage()`).
 - `main.typ` protections are literal string checks (`path === 'main.typ'`), not `project.mainFile`.
 - Folder detection = "path has no dot" — extension-less files are treated as folders by rename/delete.
 - Dead code: `resetCompiler()` in the worker (no message invokes it), `PdfPreviewProps.fileCount/charCount` (never used), `ProjectStorage.getStorageSize`/`isStorageNearLimit` (no call sites).
-- Build noise (pre-existing): `[INEFFECTIVE_DYNAMIC_IMPORT]` — `shiki` is both statically and dynamically imported in `CodeEditor.tsx`; and a wasm-bindgen "deprecated parameters" console warning comes from typst.ts's own `wasm-pack-shim`.
+- Build noise (pre-existing): a wasm-bindgen "deprecated parameters" console warning comes from typst.ts's own `wasm-pack-shim`.

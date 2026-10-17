@@ -163,9 +163,10 @@ export default function TypstEditor() {
 						{/* Code Editor */}
 						<div className="flex-1 min-w-0">
 							<CodeEditor
-								filePath={activeFilePath}
-								content={getActiveFile()?.content || ''}
+								project={currentProject}
+								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
+								onFileSelect={handleFileSelect}
 							/>
 						</div>
 					</div>
@@ -239,9 +240,10 @@ export default function TypstEditor() {
 							}}
 						>
 							<CodeEditor
-								filePath={activeFilePath}
-								content={getActiveFile()?.content || ''}
+								project={currentProject}
+								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
+								onFileSelect={handleFileSelect}
 							/>
 						</div>
 

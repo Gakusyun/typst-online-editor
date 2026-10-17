@@ -9,11 +9,13 @@
 
 ## 技术栈
 
-基于 Preact + Vite 构建（包管理使用 pnpm），使用 [Typst.ts](https://github.com/Myriad-Dreamin/typst.ts)（[@myriaddreamin](https://github.com/Myriad-Dreamin) 开发的 Typst JavaScript 实现）、PDF.js 和 Shiki。
+基于 Preact + Vite 构建（包管理使用 pnpm），编辑器为 [CodeMirror 6](https://codemirror.net/)，语言智能来自 [Tinymist](https://github.com/Myriad-Dreamin/tinymist) 的 WASM 语言服务（LSP），编译与预览使用 [Typst.ts](https://github.com/Myriad-Dreamin/typst.ts)（[@myriaddreamin](https://github.com/Myriad-Dreamin) 开发的 Typst JavaScript 实现）与 PDF.js。
 
 ## 主要特性
 
 - 借助 Typst.ts 实现全客户端编译（wasm 与编译字体随 [@myriaddreamin/typst-ts-web-compiler](https://www.npmjs.com/package/@myriaddreamin/typst-ts-web-compiler) 等包发布，运行时从 CDN 加载，`public/` 不再存放副本，编译需要联网）。
+- CodeMirror 6 编辑器，语法高亮来自 `codemirror-lang-typst`（Lezer，无 WASM）；Tinymist WASM 语言服务（后台 Web Worker 运行，运行时从 CDN 加载）提供诊断、补全、悬停、定义跳转、重命名、格式化等能力，支持跨文件 `#import` 分析与 Typst Universe 包。
+- 已知限制：Tinymist 语言服务的分析环境无法加载字体（wasm 构建内嵌了正文字体但没有数学字体），因此含公式的文档会报一条误报 “no font could be found”，编辑器会将其过滤；PDF 编译管线使用真实字体，不受影响。
 - 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
 - 项目名可在侧栏直接修改；项目可导出为 zip（以项目名命名）、从 zip 导入；设置中可查看支持的 font family。
 - 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。

@@ -50,7 +50,8 @@ export const en = {
 
 	// Code editor
 	'editor.typeHere': 'Type here...',
-	'editor.initializingHighlighter': 'Initializing highlighter...',
+	'editor.lspLoading': 'Starting language service…',
+	'editor.lspUnavailable': 'Language service unavailable',
 	'editor.imageContent': 'This is an image (binary data). Content too large to show here.',
 	'editor.fontContent': 'This is a font file (binary data). Content too large to show here.',
 
@@ -133,7 +134,8 @@ export const zh: Messages = {
 
 	// Code editor
 	'editor.typeHere': '在此输入…',
-	'editor.initializingHighlighter': '正在初始化语法高亮…',
+	'editor.lspLoading': '正在启动语言服务…',
+	'editor.lspUnavailable': '语言服务不可用',
 	'editor.imageContent': '这是一个图片文件（二进制数据），内容过大，无法在此显示。',
 	'editor.fontContent': '这是一个字体文件（二进制数据），内容过大，无法在此显示。',
 
@@ -211,7 +213,8 @@ export const de: Messages = {
 
 	// Code editor
 	'editor.typeHere': 'Hier tippen …',
-	'editor.initializingHighlighter': 'Highlighter wird initialisiert …',
+	'editor.lspLoading': 'Sprachdienst wird gestartet …',
+	'editor.lspUnavailable': 'Sprachdienst nicht verfügbar',
 	'editor.imageContent': 'Dies ist eine Bilddatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 	'editor.fontContent': 'Dies ist eine Schriftdatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 
