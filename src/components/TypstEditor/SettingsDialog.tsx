@@ -7,10 +7,14 @@ import { useI18n } from '@/lib/i18n/useI18n'
 import { normalizeFontChoice, type FontChoice } from '@/lib/appearance/appearance'
 import {
 	fontFamilies,
+	isFontAccessBlocked,
 	isFontAccessDenied,
 	isSystemFontsSupported,
 	querySystemFonts,
+	systemFontsUnavailableReason,
+	type SystemFontsUnavailableReason,
 } from '@/lib/fonts/localFonts'
+import type { MessageKey } from '@/lib/i18n/messages'
 import { useAppearance } from '@/lib/appearance/useAppearance'
 
 interface SettingsDialogProps {
@@ -25,8 +29,26 @@ type SystemFontsState =
 	| { status: 'idle' }
 	| { status: 'loading' }
 	| { status: 'ready'; families: string[] }
+	/** The user refused the permission. */
 	| { status: 'denied' }
+	/** The environment refused it (permissions policy, origin, no gesture). */
+	| { status: 'blocked' }
 	| { status: 'failed' }
+
+/** The failure that explains why listing the fonts did not work. */
+function failureState(error: unknown): SystemFontsState {
+	if (isFontAccessDenied(error)) return { status: 'denied' }
+	if (isFontAccessBlocked(error)) return { status: 'blocked' }
+	return { status: 'failed' }
+}
+
+/** Why the API is missing, as a message the user can act on (`localFonts.ts`). */
+const FONTS_UNAVAILABLE_MESSAGE: Record<SystemFontsUnavailableReason, MessageKey> = {
+	'insecure-context': 'settings.fontsInsecureContext',
+	'opaque-origin': 'settings.fontsOpaqueOrigin',
+	embedded: 'settings.fontsEmbedded',
+	unsupported: 'settings.fontsUnsupported',
+}
 
 export default function SettingsDialog({
 	onClose,
@@ -42,6 +64,8 @@ export default function SettingsDialog({
 	const [uiFontDraft, setUiFontDraft] = useState(uiFont ?? '')
 	const [editorFontDraft, setEditorFontDraft] = useState(editorFont ?? '')
 	const fontsSupported = isSystemFontsSupported()
+	const unavailableReason = systemFontsUnavailableReason()
+	const unavailableNotice = unavailableReason ? t(FONTS_UNAVAILABLE_MESSAGE[unavailableReason]) : null
 	const families = systemFonts.status === 'ready' ? systemFonts.families : []
 
 	useEffect(() => {
@@ -73,7 +97,7 @@ export default function SettingsDialog({
 			return true
 		} catch (error) {
 			console.warn('[settings] could not list system fonts', error)
-			setSystemFonts({ status: isFontAccessDenied(error) ? 'denied' : 'failed' })
+			setSystemFonts(failureState(error))
 			return false
 		}
 	}
@@ -105,6 +129,9 @@ export default function SettingsDialog({
 			break
 		case 'denied':
 			systemFontsMessage = t('settings.fontsDenied')
+			break
+		case 'blocked':
+			systemFontsMessage = t('settings.fontsBlocked')
 			break
 		case 'failed':
 			systemFontsMessage = t('settings.fontsFailed')
@@ -153,6 +180,10 @@ export default function SettingsDialog({
 
 					<div className="mt-5 pt-4 border-t border-gray-700">
 						<h3 className="text-sm font-semibold text-gray-300">{t('settings.fonts')}</h3>
+
+						{unavailableNotice && (
+							<p className="mt-2 text-xs text-amber-400/90">{unavailableNotice}</p>
+						)}
 
 						<label className="block text-sm text-gray-300 mt-2 mb-1" htmlFor="settings-ui-font">
 							{t('settings.uiFont')}
@@ -211,9 +242,7 @@ export default function SettingsDialog({
 								<span className="text-xs text-gray-400">{systemFontsMessage}</span>
 							)}
 						</div>
-						<p className="mt-2 text-xs text-gray-500">
-							{fontsSupported ? t('settings.fontFamilyHint') : t('settings.fontsUnsupported')}
-						</p>
+						<p className="mt-2 text-xs text-gray-500">{t('settings.fontFamilyHint')}</p>
 
 						<label className="flex items-start gap-2 mt-4 cursor-pointer">
 							<input
@@ -225,9 +254,9 @@ export default function SettingsDialog({
 							/>
 							<span className="text-sm text-gray-300">{t('settings.documentFontsAuto')}</span>
 						</label>
-						<p className="mt-2 text-xs text-gray-500">
-							{fontsSupported ? t('settings.documentFontsHint') : t('settings.systemFontsDisabled')}
-						</p>
+						{fontsSupported && (
+							<p className="mt-2 text-xs text-gray-500">{t('settings.documentFontsHint')}</p>
+						)}
 					</div>
 
 					<div className="mt-5 pt-4 border-t border-gray-700">

@@ -108,6 +108,19 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 支持的 CDN 字体族名可在「设置」→「查看支持的 Font Family」中查看，同一处也会列出本机可用的系统字体族名。
 
+### 读不到系统字体？
+
+设置弹窗会直接说明**为什么**读不到（不再是一句笼统的「不支持」）：先在控制台执行 `typeof navigator.queryLocalFonts`，返回 `"undefined"` 就说明浏览器没有提供这个 API，再对照下表。
+
+| 设置里的提示 | 原因 | 处理 |
+|---|---|---|
+| 浏览器没有提供 Local Font Access API | 只有桌面版 Chromium 实现：Chrome / Edge 103+；Firefox、Safari、手机浏览器（含 Chrome for Android）、应用内浏览器与 WebView 都没有 | 换桌面版 Chrome / Edge；不换浏览器的话，文档字体只能靠上传字体文件或 CDN 字体 |
+| 不是安全上下文 | 页面用 `http://` 加非 localhost（例如局域网 IP）打开，浏览器根本不会暴露该 API | 用 `https://` 或 `http://localhost` 打开 |
+| 来源是不透明 origin | 直接 `file://` 双击打开 HTML | `http://localhost`（`pnpm preview`）或 https |
+| 被嵌入在 iframe 中 | 外层页面没允许 `local-fonts`（默认只允许同源） | 外层 iframe 加 `allow="local-fonts"` |
+| 浏览器阻止了字体读取（SecurityError） | 权限策略、来源不被信任，或该调用不是由用户操作触发 | 用按钮 / 复选框触发（本就是用户手势）；检查站点的权限策略 |
+| 系统字体访问被拒绝 | 在权限弹窗里点了「拒绝」 | 在地址栏站点设置里重新允许「字体」权限后重试 |
+
 ## 致谢
 
 感谢 Myriad-Dreamin 创建 [typst.ts](https://github.com/Myriad-Dreamin/typst.ts)，感谢 [@cosformula](https://github.com/cosformula) 创建 [mdxport](https://github.com/cosformula/mdxport)（本演示的灵感来源），以及 Martin Haug 和 Laurenz Mädje 创建 [Typst](https://github.com/typst/typst)。

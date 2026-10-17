@@ -21,6 +21,31 @@ export function isSystemFontsSupported(): boolean {
 	return queryFn() !== null
 }
 
+/**
+ * Why the API is missing here — `null` when it is available.
+ *
+ * The API is desktop-Chromium-only (Chrome/Edge 103+: `chrome_android`,
+ * `webview_*`, Firefox and Safari all report no support) *and* needs a secure
+ * context, so the interesting cases are the ones the user can fix.
+ */
+export type SystemFontsUnavailableReason =
+	/** `http://` on a non-localhost host: the API is never exposed. */
+	| 'insecure-context'
+	/** Opaque origin (e.g. the page opened as `file://`): access is refused. */
+	| 'opaque-origin'
+	/** Cross-origin iframe whose parent did not allow `local-fonts`. */
+	| 'embedded'
+	/** Right environment, browser without the API (Firefox, Safari, mobile). */
+	| 'unsupported'
+
+export function systemFontsUnavailableReason(): SystemFontsUnavailableReason | null {
+	if (isSystemFontsSupported()) return null
+	if (!window.isSecureContext) return 'insecure-context'
+	if (window.location.origin === 'null') return 'opaque-origin'
+	if (window.self !== window.top) return 'embedded'
+	return 'unsupported'
+}
+
 /** Last enumeration: font metadata only (no font data), safe to keep around. */
 let cachedFonts: LocalFontData[] | null = null
 
@@ -47,10 +72,16 @@ export function fontFamilies(fonts: LocalFontData[]): string[] {
 
 /** Whether an error from {@link querySystemFonts} means the user said no. */
 export function isFontAccessDenied(error: unknown): boolean {
-	return (
-		error instanceof DOMException &&
-		(error.name === 'NotAllowedError' || error.name === 'SecurityError')
-	)
+	return error instanceof DOMException && error.name === 'NotAllowedError'
+}
+
+/**
+ * Whether an error means the browser refused for a reason the user did not
+ * choose: a permissions policy, an opaque origin, or a call that no user
+ * gesture triggered (`SecurityError` per the spec).
+ */
+export function isFontAccessBlocked(error: unknown): boolean {
+	return error instanceof DOMException && error.name === 'SecurityError'
 }
 
 /** Families already published to the document; registration is not idempotent. */
