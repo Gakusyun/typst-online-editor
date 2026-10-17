@@ -14,7 +14,7 @@
 ## 主要特性
 
 - 借助 Typst.ts 实现全客户端编译（wasm 文件随 [@myriaddreamin/typst-ts-web-compiler](https://www.npmjs.com/package/@myriaddreamin/typst-ts-web-compiler) 包发布，同步到本地 `public/wasm/` 使用）。
-- 完整的示例演示：可加载不同示例、文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
+- 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
 ## 使用与部署

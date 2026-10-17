@@ -28,12 +28,11 @@ State management: **no global store**. `TypstEditor.tsx` is the sole orchestrato
 |`index.html`, `src/main.tsx`|Vite entry: `index.html` mounts `#app`, `main.tsx` imports global CSS and renders `TypstEditor`|
 |`src/styles/`|`globals.css` (Tailwind import + Shiki wrap override) and the pdf.js `textlayer`/`annotationlayer` CSS|
 |`src/components/`|`TypstEditor/` (orchestrator + header + hooks), `CodeEditor/` (Shiki + textarea), `FileExplorer/` (virtual folder tree), `PDFViewer/` (canvas preview)|
-|`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM), `examples/TypstExamples.ts` (example registry)|
+|`src/lib/typst/`|`TypstCompilerService.ts` (main-thread facade), `typstClient.ts` (worker RPC), `typst.worker.ts` (WASM)|
 |`src/lib/storage/`|`ProjectStorage.ts` — localStorage singleton; keys `typst-project-<id>` + `typst-projects-list`|
 |`src/lib/pdf/`|`pdfjs.ts` — cached dynamic import of `pdfjs-dist`|
 |`public/wasm/`|28 MB Typst WASM binary, **checked into git**; must match the installed `@myriaddreamin` version (see Known Quirks)|
 |`public/fonts/`|IBM Plex, NewCM Math (core); Noto CJK + NotoColorEmoji (lazy, content-detected)|
-|`public/typst-examples/`|Example corpus; entry file per example MUST be `main.typ`|
 |`public/textmate-sintax/`|Typst TextMate grammar for Shiki — spelling is *sic*, don't "fix" it|
 
 ## Development Commands
@@ -59,8 +58,6 @@ Static deploy (GitHub Pages): `pnpm build` emits a fully static `dist/`; for sub
 - **State updates** — rebuild `Project` immutably; `lastModified: 0` on edits is deliberate (`ProjectStorage.save` stamps only falsy timestamps).
 - **Styling** — Tailwind v4 utilities in JSX (CSS-first config: `@import "tailwindcss"`, **no** `tailwind.config.*`; Tailwind runs through the `@tailwindcss/vite` plugin, no PostCSS config). Inline `style` only for dynamic sizing; `src/styles/globals.css` holds the Shiki `pre-wrap` override. Icons: `lucide-preact`.
 - **Typing** — `strict: true`; typed arrays as `Uint8Array<ArrayBuffer>` (TS ≥ 5.7 feature); `as unknown as` casts allowed where `pdfjs-dist`/worker typings are wrong — keep the explanatory comments. TypeScript 7 has **no JS compiler API**, which is why the lint toolchain is oxlint, not typescript-eslint.
-
-**Recipe — add an example:** create `public/typst-examples/<name>/main.typ`, then register it in `TYPST_EXAMPLES` in `src/lib/typst/examples/TypstExamples.ts` (`{id, name, description, filePath}`; multi-file adds `isMultiFile: true` + `additionalFiles: [{path, filePath}]`). Every fetch URL is prefixed with the `publicBasePath` derived from `import.meta.env.BASE_URL`. Binary companions (images/fonts) are auto-converted to data URLs.
 
 **Recipe — add fonts:** drop files in `public/fonts/`, register in `CORE_FONTS` / `EMOJI_FONTS` / `CJK_FONTS` in `typst.worker.ts`. User-uploaded fonts arrive as data URLs and re-create the compiler via `reinitializeWithCustomFonts`.
 

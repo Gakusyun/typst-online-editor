@@ -1,8 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
-import { TYPST_EXAMPLES, fetchExample } from '@/lib/typst/examples/TypstExamples'
-import type { Project } from '@/lib/storage/ProjectStorage'
 import FileExplorer from '../FileExplorer'
 import TypstEditorHeader from './TypstEditorHeader'
 import CodeEditor from '../CodeEditor'
@@ -24,7 +22,6 @@ const PREVIEW_MIN_WIDTH = 440 // Minimum width for PDF preview (toolbar requires
 const PREVIEW_COLLAPSED_WIDTH = 48
 
 export default function TypstEditor() {
-	const [showExamples, setShowExamples] = useState(false)
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 	const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
@@ -62,7 +59,6 @@ export default function TypstEditor() {
 		activeFilePath,
 		getActiveFile,
 		updateActiveFileContent,
-		loadProject,
 		handleFileSelect,
 		handleFileCreate,
 		handleFolderCreate,
@@ -99,54 +95,6 @@ export default function TypstEditor() {
 		}
 	}
 
-	const loadExample = async (exampleId: string) => {
-		const example = TYPST_EXAMPLES.find(ex => ex.id === exampleId)
-		if (example) {
-			try {
-				const code = await fetchExample(example.filePath)
-				
-				// Start with the main file
-				const files: Project['files'] = [
-					{
-						path: 'main.typ',
-						content: code,
-						lastModified: 0,
-					},
-				]
-				
-				// Load additional files for multi-file examples
-				if (example.isMultiFile && example.additionalFiles) {
-					for (const additionalFile of example.additionalFiles) {
-						try {
-							const additionalContent = await fetchExample(additionalFile.filePath)
-							files.push({
-								path: additionalFile.path,
-								content: additionalContent,
-								lastModified: 0,
-							})
-						} catch (error) {
-							console.error(`Failed to load additional file ${additionalFile.path}:`, error)
-						}
-					}
-				}
-				
-				const newProject: Project = {
-					id: crypto.randomUUID(),
-					name: example.name,
-					files,
-					mainFile: 'main.typ',
-					createdAt: 0,
-					lastModified: 0,
-				}
-				
-				loadProject(newProject)
-				setShowExamples(false)
-			} catch (error) {
-				console.error('Failed to load example:', error)
-			}
-		}
-	}
-
 	const effectiveSidebarWidth = isSidebarCollapsed 
 		? SIDEBAR_COLLAPSED_WIDTH 
 		: (isMobile ? SIDEBAR_MOBILE_WIDTH : sidebarResize.value)
@@ -167,12 +115,9 @@ export default function TypstEditor() {
 				status={status}
 				hasCompiled={hasCompiled}
 				pdfUrl={pdfUrl}
-				showExamples={showExamples}
 				isMobile={isMobile}
-				onToggleExamples={() => setShowExamples(!showExamples)}
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
-				onLoadExample={loadExample}
 			/>
 
 			{isMobile ? (

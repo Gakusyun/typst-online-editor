@@ -2,7 +2,6 @@
 import type { ComponentChildren } from 'preact'
 import { Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
-import LoadExamplesButton from './LoadExamplesButton'
 
 // lucide 1.x dropped brand icons, so the GitHub mark is inlined here (Simple Icons, CC0).
 function Github({ className }: { className?: string }) {
@@ -18,24 +17,18 @@ interface TypstEditorHeaderProps {
 	status: CompileStatus
 	hasCompiled: boolean
 	pdfUrl: string | null
-	showExamples: boolean
 	isMobile: boolean
-	onToggleExamples: () => void
 	onCompileNow: () => void
 	onDownload: () => void
-	onLoadExample: (exampleId: string) => void
 }
 
 export default function TypstEditorHeader({
 	status,
 	hasCompiled,
 	pdfUrl,
-	showExamples,
 	isMobile,
-	onToggleExamples,
 	onCompileNow,
 	onDownload,
-	onLoadExample,
 }: TypstEditorHeaderProps) {
 	const getStatusText = (): ComponentChildren => {
 		const textSizeClass = isMobile ? 'text-xs' : ''
@@ -95,15 +88,6 @@ export default function TypstEditorHeader({
 						</a>
 					)}
 				</div>
-				{!isMobile && (
-				<LoadExamplesButton
-					isMobile={isMobile}
-					showExamples={showExamples}
-					onToggleExamples={onToggleExamples}
-					onLoadExample={onLoadExample}
-				/>
-				)}
-				
 					{!isMobile && (
 						<a
 							href="https://github.com/Mapaor/typst-online-editor"
@@ -115,20 +99,9 @@ export default function TypstEditorHeader({
 						<Github className="w-5 h-5" />
 						</a>
 					)}
-					
-				
 			</div>
 			<div className="flex items-center gap-4">
 				<div className="flex flex-row items-center gap-2 md:justify-end md:w-auto justify-between w-full">
-					
-					{isMobile && (
-						<LoadExamplesButton
-						isMobile={isMobile}
-						showExamples={showExamples}
-						onToggleExamples={onToggleExamples}
-						onLoadExample={onLoadExample}
-					/>
-					)}
 					{(!isMobile || !hasCompiled) && getStatusText()}
 				</div>
 				{!isMobile && (
