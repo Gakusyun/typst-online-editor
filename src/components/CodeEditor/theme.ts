@@ -2,6 +2,7 @@ import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { typstTags } from 'codemirror-lang-typst/lezer'
+import { EDITOR_FONT_STACK } from '@/lib/appearance/appearance'
 
 // Colors follow the GitHub Dark palette the old Shiki editor used.
 export const editorTheme = EditorView.theme({
@@ -10,10 +11,11 @@ export const editorTheme = EditorView.theme({
 		backgroundColor: 'transparent',
 		fontSize: '14px',
 		height: '100%',
+		// Set on the editor root, not `.cm-scroller`: tooltips and panels are
+		// siblings of the scroller and must follow the same font.
+		fontFamily: EDITOR_FONT_STACK,
 	},
 	'.cm-scroller': {
-		fontFamily:
-			"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 		lineHeight: '1.625',
 		overflow: 'auto',
 		padding: '1rem 0',

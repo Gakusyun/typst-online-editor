@@ -26,7 +26,8 @@ export default function PdfPlaceholder({ status, errorMsg, hasCompiled }: PdfPla
 							<XCircle className="w-5 h-5" />
 							{t('status.error')}
 						</p>
-						<pre className="mt-2 text-sm text-left max-w-2xl overflow-auto p-4 bg-gray-800 rounded">
+						{/* Compiler output belongs to the editor surface: editor font. */}
+						<pre className="mt-2 text-sm text-left max-w-2xl overflow-auto p-4 bg-gray-800 rounded font-editor">
 							{errorMsg}
 						</pre>
 					</>

@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+/**
+ * Font choices (Settings → Fonts). `AppearanceProvider` publishes the chosen
+ * families as `--app-ui-font` / `--app-editor-font` on <html>; the fallbacks
+ * declared here are the default stacks, used until (and unless) a choice is
+ * made. The CodeMirror theme reads the same properties (see
+ * `src/components/CodeEditor/theme.ts`).
+ */
+:root {
+	--app-ui-font-fallback: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+	--app-editor-font-fallback: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+		'Courier New', monospace;
+}
+
+@theme {
+	/* `font-editor` utility, for the editor-font surface outside CodeMirror. */
+	--font-editor: var(--app-editor-font, var(--app-editor-font-fallback));
+}
+
+@layer base {
+	html {
+		font-family: var(--app-ui-font, var(--app-ui-font-fallback));
+	}
+}

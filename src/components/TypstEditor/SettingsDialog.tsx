@@ -1,17 +1,41 @@
 import { useEffect, useState } from 'preact/hooks'
-import { X, Type, ChevronUp, ChevronDown } from 'lucide-preact'
+import { X, Type, ChevronUp, ChevronDown, Loader2, RefreshCw } from 'lucide-preact'
 import { SUPPORTED_FONT_FAMILIES } from '@/lib/typst/fonts'
 import { version } from '../../../package.json'
 import { LANGS, LANG_LABELS, type LangSetting } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
+import { normalizeFontChoice, type FontChoice } from '@/lib/appearance/appearance'
+import {
+	fontFamilies,
+	isFontAccessDenied,
+	isSystemFontsSupported,
+	querySystemFonts,
+} from '@/lib/appearance/localFonts'
+import { useAppearance } from '@/lib/appearance/useAppearance'
 
 interface SettingsDialogProps {
 	onClose: () => void
 }
 
+/** Outcome of the last attempt to enumerate the machine's fonts. */
+type SystemFontsState =
+	| { status: 'idle' }
+	| { status: 'loading' }
+	| { status: 'ready'; families: string[] }
+	| { status: 'denied' }
+	| { status: 'failed' }
+
 export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
+	const { uiFont, editorFont, setUiFont, setEditorFont } = useAppearance()
 	const [showFontFamilies, setShowFontFamilies] = useState(false)
+	const [systemFonts, setSystemFonts] = useState<SystemFontsState>({ status: 'idle' })
+	// The inputs are controlled by their own draft so a half-typed family name
+	// is not applied (and persisted) on every keystroke.
+	const [uiFontDraft, setUiFontDraft] = useState(uiFont ?? '')
+	const [editorFontDraft, setEditorFontDraft] = useState(editorFont ?? '')
+	const fontsSupported = isSystemFontsSupported()
+	const families = systemFonts.status === 'ready' ? systemFonts.families : []
 
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -21,13 +45,52 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [onClose])
 
+	/** Commit a typed/picked name: normalize, echo back, apply. */
+	const commitFont = (
+		value: string,
+		setDraft: (draft: string) => void,
+		apply: (font: FontChoice) => void
+	) => {
+		const choice = normalizeFontChoice(value)
+		setDraft(choice ?? '')
+		apply(choice)
+	}
+
+	const loadSystemFonts = async () => {
+		setSystemFonts({ status: 'loading' })
+		try {
+			setSystemFonts({ status: 'ready', families: fontFamilies(await querySystemFonts()) })
+		} catch (error) {
+			console.warn('[settings] could not list system fonts', error)
+			setSystemFonts({ status: isFontAccessDenied(error) ? 'denied' : 'failed' })
+		}
+	}
+
+	let systemFontsMessage = ''
+	switch (systemFonts.status) {
+		case 'loading':
+			systemFontsMessage = t('settings.fontsLoading')
+			break
+		case 'ready':
+			systemFontsMessage = t('settings.fontsLoaded', { count: systemFonts.families.length })
+			break
+		case 'denied':
+			systemFontsMessage = t('settings.fontsDenied')
+			break
+		case 'failed':
+			systemFontsMessage = t('settings.fontsFailed')
+			break
+		case 'idle':
+			break
+	}
+
 	return (
 		<div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
 			onClick={onClose}
 		>
 			<div
-				className="w-full max-w-sm rounded-lg bg-gray-800 border border-gray-700 shadow-xl"
+				className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-gray-800 border border-gray-700 shadow-xl"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
@@ -58,6 +121,71 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 							</option>
 						))}
 					</select>
+
+					<div className="mt-5 pt-4 border-t border-gray-700">
+						<h3 className="text-sm font-semibold text-gray-300">{t('settings.fonts')}</h3>
+
+						<label className="block text-sm text-gray-300 mt-2 mb-1" htmlFor="settings-ui-font">
+							{t('settings.uiFont')}
+						</label>
+						<input
+							id="settings-ui-font"
+							type="text"
+							list="system-font-families"
+							value={uiFontDraft}
+							placeholder={t('settings.fontDefault')}
+							autoComplete="off"
+							spellcheck={false}
+							onInput={(e) => setUiFontDraft(e.currentTarget.value)}
+							onChange={(e) => commitFont(e.currentTarget.value, setUiFontDraft, setUiFont)}
+							className="w-full bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+
+						<label className="block text-sm text-gray-300 mt-3 mb-1" htmlFor="settings-editor-font">
+							{t('settings.editorFont')}
+						</label>
+						<input
+							id="settings-editor-font"
+							type="text"
+							list="system-font-families"
+							value={editorFontDraft}
+							placeholder={t('settings.fontDefault')}
+							autoComplete="off"
+							spellcheck={false}
+							onInput={(e) => setEditorFontDraft(e.currentTarget.value)}
+							onChange={(e) => commitFont(e.currentTarget.value, setEditorFontDraft, setEditorFont)}
+							className="w-full bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+
+						<datalist id="system-font-families">
+							{families.map((family) => (
+								<option key={family} value={family} />
+							))}
+						</datalist>
+
+						<div className="mt-3 flex items-center gap-2">
+							{fontsSupported && (
+								<button
+									onClick={loadSystemFonts}
+									disabled={systemFonts.status === 'loading'}
+									className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 text-white text-xs rounded hover:bg-gray-600 disabled:opacity-60 transition-colors"
+								>
+									{systemFonts.status === 'loading' ? (
+										<Loader2 className="w-3.5 h-3.5 animate-spin" />
+									) : (
+										<RefreshCw className="w-3.5 h-3.5" />
+									)}
+									{t('settings.loadSystemFonts')}
+								</button>
+							)}
+							{systemFontsMessage && (
+								<span className="text-xs text-gray-400">{systemFontsMessage}</span>
+							)}
+						</div>
+						<p className="mt-2 text-xs text-gray-500">
+							{fontsSupported ? t('settings.fontFamilyHint') : t('settings.fontsUnsupported')}
+						</p>
+					</div>
 
 					<div className="mt-5 pt-4 border-t border-gray-700">
 						<button
