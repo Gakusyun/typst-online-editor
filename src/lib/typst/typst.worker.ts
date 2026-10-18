@@ -20,8 +20,11 @@ type CompileRequest = {
 	files: Record<string, string>; // Map of file path to content
 	mainFile: string; // Which file to compile
 	images?: Record<string, Uint8Array<ArrayBuffer>>;
-	// Fonts read from the machine for this compile only (see compilePdf).
-	systemFonts?: Uint8Array<ArrayBuffer>[];
+	// Installed fonts the document references. `systemFontFamilies` is the full
+	// set this compile needs — the worker keeps those and releases the rest;
+	// `systemFonts` carries data only for families it does not hold yet.
+	systemFontFamilies?: string[];
+	systemFonts?: Record<string, Uint8Array<ArrayBuffer>[]>;
 };
 
 type CompileResponse =
@@ -62,6 +65,8 @@ let cjkLoaded = false;
 let lastCompileTime = Date.now();
 let fontsNeedRebuild = false; // set when a dropped compiler's fonts must come back
 const loadedCustomFonts: Set<string> = new Set(); // Track custom font files
+/** Installed fonts the compiler carries, keyed by family — released when unused. */
+const loadedSystemFonts = new Map<string, Uint8Array<ArrayBuffer>[]>();
 
 // Package registry for Typst Universe packages (mitex, cetz, fletcher, etc.)
 const accessModel = new MemoryAccessModel();
@@ -157,7 +162,7 @@ async function upgradeCompilerWithEmoji(images: Record<string, Uint8Array<ArrayB
 
 	emojiLoaded = true;
 	console.log('[Typst] Upgrading compiler with emoji fonts...');
-	await rebuildCompilerWithFonts(images, []);
+	await rebuildCompilerWithFonts(images);
 	console.log('[Typst] Emoji fonts loaded successfully');
 }
 
@@ -169,7 +174,7 @@ async function upgradeCompilerWithCJK(images: Record<string, Uint8Array<ArrayBuf
 
 	cjkLoaded = true;
 	console.log('[Typst] Upgrading compiler with CJK fonts...');
-	await rebuildCompilerWithFonts(images, []);
+	await rebuildCompilerWithFonts(images);
 	console.log('[Typst] CJK fonts loaded successfully');
 }
 
@@ -196,20 +201,20 @@ function getCompiler(): Promise<TypstCompiler> {
 
 /**
  * Rebuilds the compiler with every font it should carry: the CDN assets, the
- * project's own font files, and (for one compile) the system fonts read from the
- * machine. Also re-applies them after the compiler was dropped.
+ * project's own font files, and the installed fonts the document references
+ * right now. Also re-applies them after the compiler was dropped.
  */
 async function rebuildCompilerWithFonts(
-	images: Record<string, Uint8Array<ArrayBuffer>>,
-	systemFonts: Uint8Array<ArrayBuffer>[]
+	images: Record<string, Uint8Array<ArrayBuffer>>
 ): Promise<void> {
 	const customFontPaths = detectCustomFonts(images);
+	const systemFonts = [...loadedSystemFonts.values()].flat();
 	console.log(
 		'[Typst] Rebuilding compiler with',
 		customFontPaths.length,
 		'project fonts and',
 		systemFonts.length,
-		'system fonts'
+		'system font faces'
 	);
 
 	const newCompiler = await createCompilerWithFonts([
@@ -225,18 +230,6 @@ async function rebuildCompilerWithFonts(
 	fontsNeedRebuild = false;
 
 	console.log('[Typst] Fonts loaded successfully');
-}
-
-/**
- * Drops the compiler that carries fonts read from the machine, so that data is
- * released together with the compile that needed it. The next compile rebuilds
- * (with system fonts again only if the source still asks for them).
- */
-function releaseSystemFonts(): void {
-	compilerPromise = null;
-	loadedCustomFonts.clear();
-	fontsNeedRebuild = true;
-	console.log('[Typst] Released the system fonts read for this compile');
 }
 
 /**
@@ -292,28 +285,44 @@ function referencedFile(files: Record<string, string>, diagnostic: string): stri
 }
 
 /**
- * Compiles one job. The system fonts of the document are read from the machine
- * for this compile only: the compiler carrying them is dropped right after, so
- * that data never outlives the compilation.
+ * Compiles one job. The installed fonts the document references are held while
+ * it references them and released on the compile that stops referencing them, so
+ * nothing lingers in memory.
  */
 async function compilePdf(
 	files: Record<string, string>,
 	mainFile: string,
 	images: Record<string, Uint8Array<ArrayBuffer>> = {},
-	systemFonts: Uint8Array<ArrayBuffer>[] = []
+	systemFontFamilies: string[] = [],
+	systemFonts: Record<string, Uint8Array<ArrayBuffer>[]> = {}
 ): Promise<{ pdf: Uint8Array; diagnostics: string[] }> {
 	// Update last compile time for lifecycle management
 	lastCompileTime = Date.now();
 
-	// The compiler must carry fonts it does not have yet: new project font files,
-	// the system fonts of this compile, or fonts it lost with a dropped compiler
-	// (idle reset, or the release at the end of a system-font compile).
+	// The compiler must carry exactly the fonts the document needs: everything
+	// else is released right here.
+	let systemFontsChanged = false;
+	for (const family of loadedSystemFonts.keys()) {
+		if (!systemFontFamilies.includes(family)) {
+			loadedSystemFonts.delete(family);
+			systemFontsChanged = true;
+		}
+	}
+	for (const [family, faces] of Object.entries(systemFonts)) {
+		if (!loadedSystemFonts.has(family)) {
+			loadedSystemFonts.set(family, faces);
+			systemFontsChanged = true;
+		}
+	}
+
+	// New project font files, a changed set of system fonts, or a dropped
+	// compiler (idle reset) all mean the compiler has to be rebuilt.
 	const needsRebuild =
 		fontsNeedRebuild ||
-		systemFonts.length > 0 ||
+		systemFontsChanged ||
 		detectCustomFonts(images).some(path => !loadedCustomFonts.has(path));
 	if (needsRebuild) {
-		await rebuildCompilerWithFonts(images, systemFonts);
+		await rebuildCompilerWithFonts(images);
 	} else {
 		// The lazy font assets change the compiler's font set, so they rebuild too.
 		const allContent = Object.values(files).join('\n');
@@ -321,11 +330,7 @@ async function compilePdf(
 		if (needsCJKFont(allContent)) await upgradeCompilerWithCJK(images);
 	}
 
-	try {
-		return await runCompile(files, mainFile, images);
-	} finally {
-		if (systemFonts.length > 0) releaseSystemFonts();
-	}
+	return await runCompile(files, mainFile, images);
 }
 
 /** Adds the sources to the compiler and compiles the document. */
@@ -394,6 +399,7 @@ ctx.onmessage = (event: MessageEvent<CompileRequest>) => {
 				message.files,
 				message.mainFile,
 				message.images,
+				message.systemFontFamilies,
 				message.systemFonts
 			);
 			const pdfCopy = new Uint8Array(pdf.length);

@@ -6,12 +6,14 @@ import { LANGS, LANG_LABELS, type LangSetting } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
 import { normalizeFontChoice, type FontChoice } from '@/lib/appearance/appearance'
 import {
+	cachedSystemFonts,
 	fontFamilies,
 	isFontAccessBlocked,
 	isFontAccessDenied,
 	isSystemFontsSupported,
 	querySystemFonts,
 	systemFontsUnavailableReason,
+	type SystemFontRegistrationError,
 	type SystemFontsUnavailableReason,
 } from '@/lib/fonts/localFonts'
 import type { MessageKey } from '@/lib/i18n/messages'
@@ -53,15 +55,29 @@ const FONTS_UNAVAILABLE_MESSAGE: Record<SystemFontsUnavailableReason, MessageKey
 	unsupported: 'settings.fontsUnsupported',
 }
 
+/** Why a family could not be applied (`localFonts.ts`), as a message. */
+const FONT_ERROR_MESSAGE: Record<SystemFontRegistrationError, MessageKey> = {
+	'not-found': 'settings.fontNotFound',
+	denied: 'settings.fontDenied',
+	unreadable: 'settings.fontUnreadable',
+	timeout: 'settings.fontUnreadable',
+	failed: 'settings.fontUnreadable',
+}
+
 export default function SettingsDialog({
 	onClose,
 	documentSystemFonts,
 	onDocumentSystemFontsChange,
 }: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
-	const { uiFont, editorFont, setUiFont, setEditorFont } = useAppearance()
+	const { uiFont, editorFont, uiFontError, editorFontError, setUiFont, setEditorFont } = useAppearance()
 	const [showFontFamilies, setShowFontFamilies] = useState(false)
-	const [systemFonts, setSystemFonts] = useState<SystemFontsState>({ status: 'idle' })
+	const [systemFonts, setSystemFonts] = useState<SystemFontsState>(() => {
+		// Already enumerated in this session (a previous dialog, or the compile
+		// path): show the names again instead of asking for another click.
+		const cached = cachedSystemFonts()
+		return cached ? { status: 'ready', families: fontFamilies(cached) } : { status: 'idle' }
+	})
 	// The inputs are controlled by their own draft so a half-typed family name
 	// is not applied (and persisted) on every keystroke.
 	const [uiFontDraft, setUiFontDraft] = useState(uiFont ?? '')
@@ -203,6 +219,9 @@ export default function SettingsDialog({
 							onChange={(e) => commitFont(e.currentTarget.value, setUiFontDraft, setUiFont)}
 							className="w-full bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
+						{uiFontError && (
+							<p className="mt-1 text-xs text-red-400/90">{t(FONT_ERROR_MESSAGE[uiFontError])}</p>
+						)}
 
 						<label className="block text-sm text-gray-300 mt-3 mb-1" htmlFor="settings-editor-font">
 							{t('settings.editorFont')}
@@ -219,6 +238,9 @@ export default function SettingsDialog({
 							onChange={(e) => commitFont(e.currentTarget.value, setEditorFontDraft, setEditorFont)}
 							className="w-full bg-gray-700 text-gray-100 text-sm rounded border border-gray-600 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
+						{editorFontError && (
+							<p className="mt-1 text-xs text-red-400/90">{t(FONT_ERROR_MESSAGE[editorFontError])}</p>
+						)}
 
 						<datalist id="system-font-families">
 							{families.map((family) => (

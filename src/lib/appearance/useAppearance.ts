@@ -1,6 +1,7 @@
 import { createContext } from 'preact'
 import { useContext } from 'preact/hooks'
 import type { FontChoice } from './appearance'
+import type { SystemFontRegistrationError } from '@/lib/fonts/localFonts'
 
 /**
  * The font choices made in Settings. See `./appearance` for the persistence and
@@ -12,6 +13,12 @@ export interface Appearance {
 
 	/** Editor font family — code, completion popups and compile errors. */
 	readonly editorFont: FontChoice
+
+	/** Why the interface font could not be published to CSS, if it could not. */
+	readonly uiFontError: SystemFontRegistrationError | null
+
+	/** Same for the editor font. */
+	readonly editorFontError: SystemFontRegistrationError | null
 
 	/** Choose the interface font; persisted and applied immediately. */
 	setUiFont(font: FontChoice): void

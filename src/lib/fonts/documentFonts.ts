@@ -22,12 +22,15 @@ const FONT_ARGUMENT_WINDOW = 400
 const TYPST_STYLES = ['regular', 'bold', 'italic', 'bold italic']
 
 export interface DocumentSystemFonts {
-	/** Font data for the compiler, in the order the families were resolved. */
-	fonts: Uint8Array<ArrayBuffer>[]
+	/** Faces the worker does not hold yet, keyed by family. */
+	fonts: Record<string, Uint8Array<ArrayBuffer>[]>
 
-	/** Resolved families (lowercased), for the language server's font diagnostics. */
+	/** Every installed family the project references (lowercased). */
 	families: string[]
 }
+
+/** Families the worker already received; their data is not read again. */
+const sentFamilies = new Set<string>()
 
 export function isDocumentSystemFontsEnabled(): boolean {
 	return localStorage.getItem(DOCUMENT_FONTS_KEY) !== null
@@ -73,7 +76,7 @@ function facesOfFamily(installed: LocalFontData[], family: string): LocalFontDat
 export async function loadDocumentSystemFonts(
 	files: Record<string, string>
 ): Promise<DocumentSystemFonts> {
-	const none: DocumentSystemFonts = { fonts: [], families: [] }
+	const none: DocumentSystemFonts = { fonts: {}, families: [] }
 	if (!isDocumentSystemFontsEnabled() || !isSystemFontsSupported()) return none
 	try {
 		const wanted = new Set<string>()
@@ -82,27 +85,45 @@ export async function loadDocumentSystemFonts(
 			if (content.startsWith('data:')) continue
 			for (const family of referencedFontFamilies(content)) wanted.add(family.toLowerCase())
 		}
-		if (wanted.size === 0) return none
 
-		const installed = await querySystemFonts()
-		const fonts: Uint8Array<ArrayBuffer>[] = []
 		const families: string[] = []
-		for (const family of wanted) {
-			const faces = facesOfFamily(installed, family)
-			if (faces.length === 0) continue
-			const before = fonts.length
-			for (const face of faces) {
-				const blob = await face.blob()
-				// Some builds enumerate fonts but cannot read them (headless returns
-				// an empty blob): an empty face is not a font the compiler can use.
-				if (blob.size === 0) continue
-				fonts.push(new Uint8Array(await blob.arrayBuffer()) as Uint8Array<ArrayBuffer>)
+		const fonts: Record<string, Uint8Array<ArrayBuffer>[]> = {}
+		if (wanted.size > 0) {
+			const installed = await querySystemFonts()
+			for (const family of wanted) {
+				const faces = facesOfFamily(installed, family)
+				if (faces.length === 0) continue
+				// The worker keeps a family's data while the document references it, so
+				// it is read once here and released as soon as the reference goes away.
+				if (sentFamilies.has(family)) {
+					families.push(family)
+					continue
+				}
+				const buffers: Uint8Array<ArrayBuffer>[] = []
+				for (const face of faces) {
+					const blob = await face.blob()
+					// Some builds enumerate fonts but cannot read them (headless returns
+					// an empty blob): an empty face is not a font the compiler can use.
+					if (blob.size === 0) continue
+					buffers.push(new Uint8Array(await blob.arrayBuffer()) as Uint8Array<ArrayBuffer>)
+				}
+				// Only families we actually read count as resolved: the language server
+				// filter trusts this list.
+				if (buffers.length === 0) continue
+				fonts[family] = buffers
+				families.push(family)
+				sentFamilies.add(family)
 			}
-			// Only families we actually read count as resolved: the language server
-			// filter trusts this list.
-			if (fonts.length > before) families.push(family)
 		}
-		console.log('[fonts] system fonts for this compile:', families.join(', ') || '(none)')
+
+		// Forget families the document no longer references: the worker releases
+		// them on this compile, so a later reference must read them again.
+		for (const family of sentFamilies) {
+			if (!families.includes(family)) sentFamilies.delete(family)
+		}
+		if (families.length > 0) {
+			console.log('[fonts] system fonts for this compile:', families.join(', '))
+		}
 		return { fonts, families }
 	} catch (error) {
 		console.warn('[fonts] could not read the document system fonts', error)

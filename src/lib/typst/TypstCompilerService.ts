@@ -42,14 +42,15 @@ export class TypstCompilerService {
 	/**
 	 * Compile Typst project to PDF
 	 *
-	 * `systemFonts` are font files read from the machine for this compile (see
-	 * `@/lib/fonts/documentFonts`): the worker injects them and drops them again
-	 * when the compile is done, so the caller must not keep them either.
+	 * `systemFonts` are font files read from the machine for families the worker
+	 * does not hold yet (see `@/lib/fonts/documentFonts`); the worker keeps them
+	 * only while the document references them.
 	 */
 	async compile(
 		files: Record<string, string>,
 		mainFile: string,
-		systemFonts: Uint8Array<ArrayBuffer>[] = []
+		systemFontFamilies: string[] = [],
+		systemFonts: Record<string, Uint8Array<ArrayBuffer>[]> = {}
 	): Promise<CompileResult> {
 		const seq = ++this.compileSeq
 
@@ -84,7 +85,7 @@ export class TypstCompilerService {
 				}
 			}
 
-			const result = await this.client.compilePdf(textFiles, mainFile, images, systemFonts)
+			const result = await this.client.compilePdf(textFiles, mainFile, images, systemFontFamilies, systemFonts)
 
 			// Check if this compile was superseded by a newer one
 			if (seq !== this.compileSeq) {

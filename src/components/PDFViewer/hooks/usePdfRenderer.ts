@@ -15,6 +15,9 @@ interface CanvasInfo {
 	renderTask: RenderTask | null
 }
 
+/** Font faces pdf.js registers for a PDF's embedded fonts (`g_d<page>_f<font>`). */
+const PDFJS_FONT_FACE = /^g_d\d+_f\d+$/
+
 export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageChange }: UsePdfRendererProps) {
 	const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null)
 	const [totalPages, setTotalPages] = useState(1)
@@ -125,6 +128,14 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 				// Account for padding (p-6 = 24px on each side = 48px total)
 				const paddingTotal = 48
 				const availableWidth = fullWidth - paddingTotal
+
+				// pdf.js injects a FontFace per embedded font while rendering the text layer,
+				// named `g_d<page>_f<font>`; a new PDF would otherwise accumulate them
+				// forever (a font file is easily tens of MB). Only its own names are
+				// dropped — faces the app registered must stay.
+				for (const face of document.fonts) {
+					if (PDFJS_FONT_FACE.test(face.family)) document.fonts.delete(face)
+				}
 
 				// Render each page
 				for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
@@ -259,7 +270,7 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 						}
 					}
 				}
-				
+
 				if (mounted) {
 					setIsRendering(false)
 				}

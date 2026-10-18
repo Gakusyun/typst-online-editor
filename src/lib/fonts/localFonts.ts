@@ -97,6 +97,14 @@ export async function querySystemFonts(options?: { refresh?: boolean }): Promise
 	return cachedFonts
 }
 
+/**
+ * What this session already enumerated, or `null` — UI that must not trigger a
+ * permission prompt on its own (Settings) seeds its list from here.
+ */
+export function cachedSystemFonts(): LocalFontData[] | null {
+	return cachedFonts
+}
+
 /** Distinct family names of `fonts`, in the user's locale order. */
 export function fontFamilies(fonts: LocalFontData[]): string[] {
 	const families = new Set(fonts.map((font) => font.family).filter((family) => family !== ''))
@@ -118,42 +126,96 @@ export function isFontAccessBlocked(error: unknown): boolean {
 }
 
 /** Families already published to the document; registration is not idempotent. */
-const registered = new Set<string>()
+const registeredFaces = new Map<string, FontFace>()
+
+/** A font that never finishes loading must not hold the flow up. */
+const FONT_LOAD_TIMEOUT_MS = 5000
+
+/** Why a family could not be published to CSS — `null` when it worked. */
+export type SystemFontRegistrationError =
+	/** The API gave us a font file we could not use (empty or unparsable). */
+	| 'unreadable'
+	/** The machine does not have a font by that name. */
+	| 'not-found'
+	/** The user has not granted the font permission. */
+	| 'denied'
+	/** The font did not finish loading in time. */
+	| 'timeout'
+	| 'failed'
+
+/**
+ * Whether `family` already renders through plain `font-family`: installed fonts
+ * do, so registering them would only cost a full read of the file (tens of MB,
+ * seconds of work). Fonts from the user's font directory may not resolve, which
+ * is what registration is for.
+ */
+function familyResolves(family: string): boolean {
+	const probe = document.createElement('span')
+	probe.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:nowrap;font-size:72px'
+	probe.textContent = 'mmmmmmmmmmlli'
+	document.body.append(probe)
+	probe.style.fontFamily = `"${family}"`
+	const matched = probe.offsetWidth
+	probe.style.fontFamily = '__font_probe_missing__'
+	const fallback = probe.offsetWidth
+	probe.remove()
+	return matched !== fallback
+}
 
 /**
  * Publish an installed font family to CSS as a loaded `FontFace`, so a family
  * from the user font directory renders even where `font-family` alone misses it.
  *
  * `fonts` is an already-fetched enumeration (the Settings dialog has one);
- * without it, the API is queried again. Never throws: `false` just means CSS
- * falls back to the default stack.
+ * without it, the API is queried again. Never throws: a failure reason is
+ * returned so the UI can say what happened, and CSS falls back either way.
  */
-export async function registerSystemFont(family: string, fonts?: LocalFontData[]): Promise<boolean> {
-	if (registered.has(family)) return true
+export async function registerSystemFont(
+	family: string,
+	fonts?: LocalFontData[]
+): Promise<SystemFontRegistrationError | null> {
+	if (registeredFaces.has(family)) return null
 	// Without the API the family is still usable through plain `font-family`;
 	// only enumeration needs the permission, so its absence is not a failure.
-	if (!fonts && !isSystemFontsSupported()) return false
+	if (!fonts && !isSystemFontsSupported()) return 'not-found'
 	try {
+		if (familyResolves(family)) return null
 		const list = fonts ?? (await querySystemFonts())
 		const wanted = family.toLowerCase()
 		const match = list.find((font) => font.family.toLowerCase() === wanted)
-		if (!match) return false
+		if (!match) return 'not-found'
 		// `FontFace` wants a `BufferSource`, not the `Blob` the API hands out.
 		const file = await match.blob()
 		// A build that enumerates fonts without being able to read them returns an
 		// empty blob; there is nothing to register then.
-		if (file.size === 0) return false
+		if (file.size === 0) return 'unreadable'
 		const face = new FontFace(family, await file.arrayBuffer())
-		await face.load()
+		const loaded = await Promise.race([
+			face.load().then(() => true),
+			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FONT_LOAD_TIMEOUT_MS)),
+		])
+		if (!loaded) return 'timeout'
 		document.fonts.add(face)
-		registered.add(family)
-		return true
+		registeredFaces.set(family, face)
+		return null
 	} catch (error) {
 		// A denied permission is a normal choice; anything else is worth telling
 		// the user about.
-		if (!isFontAccessDenied(error)) {
-			console.warn('[local-fonts] could not register font', family, error)
-		}
-		return false
+		if (isFontAccessDenied(error)) return 'denied'
+		if (isFontAccessBlocked(error)) return 'denied'
+		console.warn('[local-fonts] could not register font', family, error)
+		return 'failed'
+	}
+}
+
+/**
+ * Drop registered faces whose family is no longer used: a font file can be tens
+ * of MB, so replacing one family with another must not keep both.
+ */
+export function pruneSystemFontFaces(keep: string[]): void {
+	for (const [family, face] of registeredFaces) {
+		if (keep.includes(family)) continue
+		document.fonts.delete(face)
+		registeredFaces.delete(family)
 	}
 }

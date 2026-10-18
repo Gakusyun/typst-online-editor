@@ -106,13 +106,12 @@ export default function TypstEditor() {
 
 	/**
 	 * Turning the feature on changes what the next compile can use, so compile
-	 * right away instead of waiting for the next edit: the document's own fonts
-	 * show up in the preview immediately.
+	 * right away instead of waiting for the next edit — and turning it off has to
+	 * release the fonts the worker is holding, which also takes a compile.
 	 */
 	const handleDocumentSystemFonts = useCallback(
 		(enabled: boolean) => {
 			setDocumentSystemFonts(enabled)
-			if (!enabled) return
 			const filesMap = currentProject.files.reduce<Record<string, string>>((acc, file) => {
 				acc[file.path] = file.content
 				return acc

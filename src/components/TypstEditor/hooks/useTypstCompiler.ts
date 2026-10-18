@@ -43,14 +43,14 @@ export function useTypstCompiler() {
 
 		const { fonts, families } = documentSystemFontsRef.current
 			? await loadDocumentSystemFonts(files)
-			: { fonts: [], families: [] }
+			: { fonts: {}, families: [] }
 		setDocumentFontFamilies((previous) =>
 			previous.length === families.length && previous.every((family, index) => family === families[index])
 				? previous
 				: families
 		)
 
-		await compilerService.compile(files, mainFile, fonts)
+		await compilerService.compile(files, mainFile, families, fonts)
 	}, [])
 
 	useEffect(() => {
