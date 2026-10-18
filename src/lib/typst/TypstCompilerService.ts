@@ -7,12 +7,14 @@ export interface CompileResult {
 	pdf?: Uint8Array<ArrayBuffer>
 	pdfUrl?: string
 	error?: string
+	/** Compiler warnings from this compile — shown even when a PDF came out. */
+	diagnostics: string[]
 	status: CompileStatus
 }
 
 export interface CompileListener {
 	onStatusChange?: (status: CompileStatus) => void
-	onSuccess?: (pdf: Uint8Array<ArrayBuffer>, pdfUrl: string) => void
+	onSuccess?: (pdf: Uint8Array<ArrayBuffer>, pdfUrl: string, diagnostics: string[]) => void
 	onError?: (error: string) => void
 }
 
@@ -91,6 +93,7 @@ export class TypstCompilerService {
 			if (seq !== this.compileSeq) {
 				return {
 					success: false,
+					diagnostics: [],
 					status: 'idle',
 				}
 			}
@@ -105,13 +108,14 @@ export class TypstCompilerService {
 			const pdfUrl = URL.createObjectURL(blob)
 			this.currentPdfUrl = pdfUrl
 
-			this.notifySuccess(result.pdf, pdfUrl)
+			this.notifySuccess(result.pdf, pdfUrl, result.diagnostics)
 			this.notifyStatusChange('done')
 
 			return {
 				success: true,
 				pdf: result.pdf,
 				pdfUrl,
+				diagnostics: result.diagnostics,
 				status: 'done',
 			}
 		} catch (error) {
@@ -119,6 +123,7 @@ export class TypstCompilerService {
 			if (seq !== this.compileSeq) {
 				return {
 					success: false,
+					diagnostics: [],
 					status: 'idle',
 				}
 			}
@@ -130,6 +135,7 @@ export class TypstCompilerService {
 			return {
 				success: false,
 				error: errorMsg,
+				diagnostics: [],
 				status: 'error',
 			}
 		}
@@ -160,9 +166,9 @@ export class TypstCompilerService {
 		})
 	}
 
-	private notifySuccess(pdf: Uint8Array<ArrayBuffer>, pdfUrl: string): void {
+	private notifySuccess(pdf: Uint8Array<ArrayBuffer>, pdfUrl: string, diagnostics: string[]): void {
 		this.listeners.forEach((listener) => {
-			listener.onSuccess?.(pdf, pdfUrl)
+			listener.onSuccess?.(pdf, pdfUrl, diagnostics)
 		})
 	}
 

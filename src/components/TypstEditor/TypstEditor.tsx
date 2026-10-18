@@ -52,6 +52,7 @@ export default function TypstEditor() {
 		status,
 		pdfUrl,
 		errorMsg,
+		diagnostics,
 		hasCompiled,
 		documentSystemFonts,
 		setDocumentSystemFonts,
@@ -214,6 +215,7 @@ export default function TypstEditor() {
 							pdfUrl={pdfUrl}
 							status={status}
 							errorMsg={errorMsg}
+							diagnostics={diagnostics}
 							hasCompiled={hasCompiled}
 							fileCount={currentProject.files.length}
 							charCount={getActiveFile()?.content.length || 0}
@@ -317,6 +319,7 @@ export default function TypstEditor() {
 								pdfUrl={pdfUrl}
 								status={status}
 								errorMsg={errorMsg}
+								diagnostics={diagnostics}
 								hasCompiled={hasCompiled}
 								fileCount={currentProject.files.length}
 								charCount={getActiveFile()?.content.length || 0}

@@ -12,6 +12,8 @@
  * user gesture that grants the permission the API needs on first use.
  */
 import { cachedSystemFonts, isSystemFontsSupported, querySystemFonts } from './localFonts'
+import { SUPPORTED_FONT_FAMILIES } from '@/lib/typst/fonts'
+import { currentLang, translate, type MessageKey } from '@/lib/i18n/i18n'
 
 /** `localStorage` key: document system fonts are off only when it says `'0'`. */
 const DOCUMENT_FONTS_KEY = 'typst-document-fonts'
@@ -28,6 +30,13 @@ export interface DocumentSystemFonts {
 
 	/** Every installed family the project references (lowercased). */
 	families: string[]
+
+	/**
+	 * Explained lines for families the source wants but the compile will not
+	 * get. The compiler only reports its own `unknown font family` warning when
+	 * a compile fails, so these carry the news when it succeeds.
+	 */
+	missing: string[]
 }
 
 /** Families the worker already received; their data is not read again. */
@@ -43,6 +52,8 @@ export type DocumentFontMiss =
 	| 'denied'
 	/** No installed family goes by that name. */
 	| 'not-installed'
+	/** Installed and read, but the compiler still would not use it. */
+	| 'unusable'
 	/** Installed, but its font data could not be read. */
 	| 'unreadable'
 
@@ -59,7 +70,39 @@ export function documentFontMiss(family: string): DocumentFontMiss {
 	if (installed === null) return 'denied'
 	const wanted = family.trim().toLowerCase()
 	if (!installed.some((font) => font.family.toLowerCase() === wanted)) return 'not-installed'
-	return 'unreadable'
+	// Installed and matched: if the compile still lacked it, the data either
+	// never came off disk or the compiler could not parse what it got.
+	return sentFamilies.has(wanted) ? 'unusable' : 'unreadable'
+}
+
+const FONT_HINT_KEYS: Record<DocumentFontMiss, MessageKey> = {
+	disabled: 'editor.fontHintDisabled',
+	unsupported: 'editor.fontHintUnsupported',
+	denied: 'editor.fontHintDenied',
+	'not-installed': 'editor.fontHintNotInstalled',
+	unusable: 'editor.fontHintUnusable',
+	unreadable: 'editor.fontHintUnreadable',
+}
+
+/** The explanation a bare `unknown font family: X` is replaced with. */
+export function explainUnknownFont(family: string): string {
+	const lang = currentLang()
+	return translate(lang, 'editor.fontFamilyUnknown', {
+		family,
+		hint: translate(lang, FONT_HINT_KEYS[documentFontMiss(family)]),
+	})
+}
+
+/**
+ * Replace the `unknown font family: X` part of a diagnostic line with the
+ * reason and the fix. Works for both the language server's bare message and the
+ * compiler's `file:line:col: warning: …` form.
+ */
+export function explainUnknownFontLine(line: string): string {
+	const match = /unknown font family: ([^\n]+)/.exec(line)
+	if (!match) return line
+	const family = match[1].trim().replace(/^["']|["']$/g, '')
+	return line.replace(match[0], explainUnknownFont(family))
 }
 
 /**
@@ -105,6 +148,27 @@ function facesOfFamily(installed: LocalFontData[], family: string): LocalFontDat
 }
 
 /**
+ * Families the source wants but the compile will not get, each with its reason.
+ * Skipped when the project ships its own font files (those families are not
+ * ours to judge) and for families the compiler already carries.
+ */
+function missingFontWarnings(
+	files: Record<string, string>,
+	wanted: Set<string>,
+	loaded: string[]
+): string[] {
+	const projectFonts = Object.keys(files).some((path) => /\.(ttf|otf|ttc|woff2?)$/i.test(path))
+	if (projectFonts) return []
+	const warnings: string[] = []
+	for (const family of wanted) {
+		if (loaded.includes(family)) continue
+		if (SUPPORTED_FONT_FAMILIES.some((name) => name.toLowerCase() === family)) continue
+		warnings.push(explainUnknownFont(family))
+	}
+	return warnings
+}
+
+/**
  * Font data for every installed family the project references, or nothing when
  * the feature is off. Never throws: an unavailable or denied API just means the
  * compiler falls back, which must not break compiling.
@@ -112,16 +176,19 @@ function facesOfFamily(installed: LocalFontData[], family: string): LocalFontDat
 export async function loadDocumentSystemFonts(
 	files: Record<string, string>
 ): Promise<DocumentSystemFonts> {
-	const none: DocumentSystemFonts = { fonts: {}, families: [] }
+	const wanted = new Set<string>()
+	for (const content of Object.values(files)) {
+		// `data:` entries are uploads (images, fonts), not Typst source.
+		if (content.startsWith('data:')) continue
+		for (const family of referencedFontFamilies(content)) wanted.add(family.toLowerCase())
+	}
+	const none: DocumentSystemFonts = {
+		fonts: {},
+		families: [],
+		missing: missingFontWarnings(files, wanted, []),
+	}
 	if (!isDocumentSystemFontsEnabled() || !isSystemFontsSupported()) return none
 	try {
-		const wanted = new Set<string>()
-		for (const content of Object.values(files)) {
-			// `data:` entries are uploads (images, fonts), not Typst source.
-			if (content.startsWith('data:')) continue
-			for (const family of referencedFontFamilies(content)) wanted.add(family.toLowerCase())
-		}
-
 		const families: string[] = []
 		const fonts: Record<string, Uint8Array<ArrayBuffer>[]> = {}
 		if (wanted.size > 0) {
@@ -160,7 +227,7 @@ export async function loadDocumentSystemFonts(
 		if (families.length > 0) {
 			console.log('[fonts] system fonts for this compile:', families.join(', '))
 		}
-		return { fonts, families }
+		return { fonts, families, missing: missingFontWarnings(files, wanted, families) }
 	} catch (error) {
 		console.warn('[fonts] could not read the document system fonts', error)
 		return none

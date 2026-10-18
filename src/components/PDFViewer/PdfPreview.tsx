@@ -1,6 +1,7 @@
 
 import { useState } from 'preact/hooks'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
+import { useI18n } from '@/lib/i18n/useI18n'
 import { usePdfRenderer } from './hooks/usePdfRenderer'
 import PdfToolbar from './PdfToolbar'
 import PdfCanvas from './PdfCanvas'
@@ -10,6 +11,8 @@ interface PdfPreviewProps {
 	pdfUrl: string | null
 	status: CompileStatus
 	errorMsg: string | null
+	/** Compiler warnings of the current PDF — a PDF existing is not a clean run. */
+	diagnostics: string[]
 	hasCompiled: boolean
 	fileCount: number
 	charCount: number
@@ -17,7 +20,8 @@ interface PdfPreviewProps {
 	onToggleCollapse: () => void
 }
 
-export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCollapsed, onToggleCollapse }: PdfPreviewProps) {
+export default function PdfPreview({ pdfUrl, status, errorMsg, diagnostics, hasCompiled, isCollapsed, onToggleCollapse }: PdfPreviewProps) {
+	const { t } = useI18n()
 	const [zoom, setZoom] = useState(100)
 	const [currentPage, setCurrentPage] = useState(1)
 	
@@ -56,6 +60,14 @@ export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCo
 					{errorMsg && pdfUrl && (
 						<div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-xs text-red-300 overflow-auto" style={{ maxHeight: '6rem' }}>
 							<pre className="m-0 font-mono whitespace-pre-wrap break-words">{errorMsg}</pre>
+						</div>
+					)}
+					{pdfUrl && diagnostics.length > 0 && (
+						<div className="mx-2 mt-1 px-3 py-2 bg-amber-900/30 border border-amber-700 rounded text-xs text-amber-300 overflow-auto" style={{ maxHeight: '6rem' }}>
+							<p className="m-0 font-semibold">{t('preview.diagnostics')}</p>
+							{diagnostics.map((line, index) => (
+								<pre key={`${index}-${line}`} className="m-0 font-mono whitespace-pre-wrap break-words">{line}</pre>
+							))}
 						</div>
 					)}
 					{pdfUrl ? (

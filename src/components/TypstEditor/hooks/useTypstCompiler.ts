@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks'
 import { TypstCompilerService, type CompileStatus } from '@/lib/typst/TypstCompilerService'
 import {
+	explainUnknownFontLine,
 	isDocumentSystemFontsEnabled,
 	loadDocumentSystemFonts,
 	setDocumentSystemFontsEnabled,
@@ -11,6 +12,8 @@ export function useTypstCompiler() {
 	const [status, setStatus] = useState<CompileStatus>('idle')
 	const [pdfUrl, setPdfUrl] = useState<string | null>(null)
 	const [errorMsg, setErrorMsg] = useState<string | null>(null)
+	/** Compiler warnings of the last compile — shown next to the PDF. */
+	const [diagnostics, setDiagnostics] = useState<string[]>([])
 	const [hasCompiled, setHasCompiled] = useState(false)
 	/** Whether a compile reads the installed fonts the source asks for. */
 	const [documentSystemFonts, setDocumentSystemFontsState] = useState(isDocumentSystemFontsEnabled)
@@ -20,6 +23,8 @@ export function useTypstCompiler() {
 	const compilerServiceRef = useRef<TypstCompilerService | null>(null)
 	const debouncedCompileRef = useRef<((files: Record<string, string>, mainFile: string) => void) & { cancel: () => void } | null>(null)
 	const documentSystemFontsRef = useRef(documentSystemFonts)
+	/** Font problems of the compile in flight — added to its diagnostics. */
+	const fontWarningsRef = useRef<string[]>([])
 	documentSystemFontsRef.current = documentSystemFonts
 
 	/**
@@ -41,9 +46,10 @@ export function useTypstCompiler() {
 		const compilerService = compilerServiceRef.current
 		if (!compilerService) return
 
-		const { fonts, families } = documentSystemFontsRef.current
+		const { fonts, families, missing } = documentSystemFontsRef.current
 			? await loadDocumentSystemFonts(files)
-			: { fonts: {}, families: [] }
+			: { fonts: {}, families: [], missing: [] }
+		fontWarningsRef.current = missing
 		setDocumentFontFamilies((previous) =>
 			previous.length === families.length && previous.every((family, index) => family === families[index])
 				? previous
@@ -63,16 +69,21 @@ export function useTypstCompiler() {
 			onStatusChange: (newStatus) => {
 				setStatus(newStatus)
 			},
-			onSuccess: (pdf, url) => {
+			onSuccess: (pdf, url, warnings) => {
 				setPdfUrl(url)
 				setErrorMsg(null)
 				setHasCompiled(true)
+				// A PDF existing does not mean the compile was clean: warnings go
+				// on screen next to the artifact, not only in the console.
+				setDiagnostics([...warnings.map(explainUnknownFontLine), ...fontWarningsRef.current])
 			},
 			onError: (error) => {
 				// Keep the last successful PDF on screen: the artifact is only
 				// replaced when a new compilation succeeds.
 				setErrorMsg(error)
 				setHasCompiled(true)
+				// The error box already carries the failed compile's diagnostics.
+				setDiagnostics([])
 			},
 		})
 
@@ -107,6 +118,7 @@ export function useTypstCompiler() {
 		status,
 		pdfUrl,
 		errorMsg,
+		diagnostics,
 		hasCompiled,
 		documentSystemFonts,
 		setDocumentSystemFonts,

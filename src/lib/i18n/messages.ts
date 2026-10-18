@@ -63,6 +63,7 @@ export const en = {
 
 	// PDF preview
 	'preview.title': 'PDF Preview',
+	'preview.diagnostics': 'Compile warnings',
 	'preview.show': 'Show Preview',
 	'preview.close': 'Close Preview',
 	'preview.openInNewTab': 'Open in New Tab',
@@ -85,6 +86,7 @@ export const en = {
 	'editor.fontHintDenied': 'the browser has not granted font access — press "Load system fonts" in Settings, allow it, and recompile',
 	'editor.fontHintNotInstalled': 'no installed font family goes by that name — check the spelling',
 	'editor.fontHintUnreadable': 'the family is installed but its font file could not be read, so the default font is used',
+	'editor.fontHintUnusable': 'the font was read from this machine but the compiler could not use that font format — try another build of the font',
 	'editor.imageContent': 'This is an image (binary data). Content too large to show here.',
 	'editor.fontContent': 'This is a font file (binary data). Content too large to show here.',
 
@@ -180,6 +182,7 @@ export const zh: Messages = {
 
 	// PDF preview
 	'preview.title': 'PDF 预览',
+	'preview.diagnostics': '编译警告',
 	'preview.show': '显示预览',
 	'preview.close': '关闭预览',
 	'preview.openInNewTab': '在新标签页中打开',
@@ -202,6 +205,7 @@ export const zh: Messages = {
 	'editor.fontHintDenied': '浏览器尚未授权读取系统字体——到设置里点「读取系统字体」并允许后重新编译',
 	'editor.fontHintNotInstalled': '本机没有叫这个名字的字体族——请检查拼写',
 	'editor.fontHintUnreadable': '该字体已安装但字体文件读不出来，已回落到默认字体',
+	'editor.fontHintUnusable': '字体已从本机读入，但编译器无法使用这种字体格式——换一个版本的字体文件试试',
 	'editor.imageContent': '这是一个图片文件（二进制数据），内容过大，无法在此显示。',
 	'editor.fontContent': '这是一个字体文件（二进制数据），内容过大，无法在此显示。',
 
@@ -292,6 +296,7 @@ export const de: Messages = {
 
 	// PDF preview
 	'preview.title': 'PDF-Vorschau',
+	'preview.diagnostics': 'Kompilierungswarnungen',
 	'preview.show': 'Vorschau anzeigen',
 	'preview.close': 'Vorschau schließen',
 	'preview.openInNewTab': 'In neuem Tab öffnen',
@@ -314,6 +319,7 @@ export const de: Messages = {
 	'editor.fontHintDenied': 'der Browser hat den Schriftzugriff nicht erlaubt — in den Einstellungen auf „Systemschriften laden“ klicken, erlauben und neu kompilieren',
 	'editor.fontHintNotInstalled': 'keine installierte Schriftfamilie heißt so — Schreibweise prüfen',
 	'editor.fontHintUnreadable': 'die Familie ist installiert, die Schriftdatei ließ sich aber nicht lesen — die Standardschrift wird verwendet',
+	'editor.fontHintUnusable': 'die Schrift wurde von diesem Rechner gelesen, aber der Compiler kann dieses Schriftformat nicht nutzen — eine andere Ausgabe der Schrift probieren',
 	'editor.imageContent': 'Dies ist eine Bilddatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 	'editor.fontContent': 'Dies ist eine Schriftdatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 

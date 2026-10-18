@@ -1,18 +1,9 @@
 import type { Transport } from '@codemirror/lsp-client'
-import { currentLang, translate, type MessageKey } from '@/lib/i18n/i18n'
-import { documentFontMiss, type DocumentFontMiss } from '@/lib/fonts/documentFonts'
+import { explainUnknownFont } from '@/lib/fonts/documentFonts'
 
 export type TinymistLspStatus = 'loading' | 'ready' | 'error'
 
 const UNKNOWN_FONT_FAMILY = /^unknown font family: (.+)$/
-
-const FONT_HINT_KEYS: Record<DocumentFontMiss, MessageKey> = {
-	disabled: 'editor.fontHintDisabled',
-	unsupported: 'editor.fontHintUnsupported',
-	denied: 'editor.fontHintDenied',
-	'not-installed': 'editor.fontHintNotInstalled',
-	unreadable: 'editor.fontHintUnreadable',
-}
 
 /**
  * Replaces the bare `unknown font family: X` wording with *why* this compile
@@ -42,11 +33,7 @@ function explainUnknownFonts(message: string): string {
 		const match = UNKNOWN_FONT_FAMILY.exec(text)
 		if (!match) continue
 		const family = match[1].trim().replace(/^["']|["']$/g, '')
-		const lang = currentLang()
-		diagnostic.message = translate(lang, 'editor.fontFamilyUnknown', {
-			family,
-			hint: translate(lang, FONT_HINT_KEYS[documentFontMiss(family)]),
-		})
+		diagnostic.message = explainUnknownFont(family)
 		changed = true
 	}
 	return changed ? JSON.stringify(payload) : message

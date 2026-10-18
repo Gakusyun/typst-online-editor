@@ -86,7 +86,7 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 ## 字体设置
 
-设置分两类：应用自身的**界面 / 编辑器字体**（只影响 UI），以及**文档字体**（影响编译出的 PDF）。两类都通过 [Local Font Access API](https://developer.chrome.com/docs/capabilities/web-apis/local-fonts)（`window.queryLocalFonts()`）读取系统字体。该 API **仅 Chromium 系浏览器支持**且需要授权：首次授权要由用户手势触发（设置里的「读取系统字体」按钮负责这一点），授权之后编译就能自动读取文档引用的字体，无需再点。字体用不上时编辑器会直接说明原因（未开启、未授权、本机没有这个名字、字体文件读不出），不会只留一句「not found」。拒绝授权或浏览器不支持时仍可手写字体名。`tsc` 所需的类型声明在 `src/types/local-fonts.d.ts`（TypeScript 7 的 `lib.dom` 尚未内置）。
+设置分两类：应用自身的**界面 / 编辑器字体**（只影响 UI），以及**文档字体**（影响编译出的 PDF）。两类都通过 [Local Font Access API](https://developer.chrome.com/docs/capabilities/web-apis/local-fonts)（`window.queryLocalFonts()`）读取系统字体。该 API **仅 Chromium 系浏览器支持**且需要授权：首次授权要由用户手势触发（设置里的「读取系统字体」按钮负责这一点），授权之后编译就能自动读取文档引用的字体，无需再点。字体用不上时编辑器会直接说明原因（未开启、未授权、本机没有这个名字、字体文件读不出），不会只留一句「not found」；预览区的「编译警告」条也会**在产物已生成时**列出这些问题（编译器自身只在编译失败时才吐诊断，成功时的字体问题由应用直接判定并显示）。拒绝授权或浏览器不支持时仍可手写字体名。`tsc` 所需的类型声明在 `src/types/local-fonts.d.ts`（TypeScript 7 的 `lib.dom` 尚未内置）。
 
 ### 界面字体与编辑器字体
 
