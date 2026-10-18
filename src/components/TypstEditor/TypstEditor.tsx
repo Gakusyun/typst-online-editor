@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
 import FileExplorer from '../FileExplorer'
 import TypstEditorHeader from './TypstEditorHeader'
-import SettingsDialog from './SettingsDialog'
+import SettingsDialog, { type SettingsTab } from './SettingsDialog'
 import CodeEditor from '../CodeEditor'
 import PdfPreview from '../PDFViewer'
 import ResizeHandle from './ResizeHandle'
@@ -26,7 +26,8 @@ export default function TypstEditor() {
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 	const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
-	const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+	/** Non-null while the settings dialog is open — and which page it opens on. */
+	const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
 	
 	// Mobile detection
 	useEffect(() => {
@@ -130,13 +131,11 @@ export default function TypstEditor() {
 				isMobile={isMobile}
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
-				onOpenSettings={() => setIsSettingsOpen(true)}
+				onOpenSettings={() => setSettingsTab('general')}
 			/>
 
-			{isSettingsOpen && (
-				<SettingsDialog
-					onClose={() => setIsSettingsOpen(false)}
-				/>
+			{settingsTab && (
+				<SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />
 			)}
 
 			{isMobile ? (

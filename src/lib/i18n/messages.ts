@@ -26,6 +26,9 @@ export const en = {
 
 	// Settings dialog
 	'settings.title': 'Settings',
+	'settings.tabGeneral': 'General',
+	'settings.tabFonts': 'Fonts',
+	'settings.tabAbout': 'About',
 	'settings.language': 'Language',
 	'settings.followSystem': 'Follow system',
 	'settings.about': 'About',
@@ -132,6 +135,9 @@ export const zh: Messages = {
 
 	// Settings dialog
 	'settings.title': '设置',
+	'settings.tabGeneral': '通用',
+	'settings.tabFonts': '字体',
+	'settings.tabAbout': '关于',
 	'settings.language': '语言',
 	'settings.followSystem': '跟随系统',
 	'settings.about': '关于',
@@ -233,6 +239,9 @@ export const de: Messages = {
 
 	// Settings dialog
 	'settings.title': 'Einstellungen',
+	'settings.tabGeneral': 'Allgemein',
+	'settings.tabFonts': 'Schriften',
+	'settings.tabAbout': 'Über',
 	'settings.language': 'Sprache',
 	'settings.followSystem': 'Systemsprache',
 	'settings.about': 'Über',

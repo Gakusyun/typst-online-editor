@@ -21,6 +21,7 @@
 - 项目名可在侧栏直接修改；项目可导出为 zip（以项目名命名）、从 zip 导入；设置中可查看支持的 font family。
 - 界面字体与编辑器字体可在「设置」中指定（编辑器字体同时用于编译报错信息），候选字体通过 Local Font Access API（`window.queryLocalFonts()`）枚举系统已装字体（仅 Chromium 支持、需授权；其它浏览器可直接手写字体名）。**编译不读取本机字体**，文档字体请用随项目上传的字体文件或 CDN 字体。详见[字体设置](#字体设置)。
 - 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。
+- 设置弹窗分页（通用 / 字体 / 关于），内容区独立滚动。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
 ## 使用与部署
@@ -123,6 +124,16 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
    mobile: navigator.userAgentData?.mobile, secure: window.isSecureContext,
    origin: location.origin, iframe: window.self !== window.top })
 ```
+
+## 设置弹窗
+
+「设置」（右上角齿轮）分三页，左侧页签切换，右侧内容区独立滚动：
+
+| 页签 | 内容 |
+|---|---|
+| 通用 | 界面语言（跟随系统 / 简体中文 / English / Deutsch） |
+| 字体 | 界面字体、编辑器字体、读取系统字体、查看编译支持的 Font Family |
+| 关于 | 版本号 |
 
 ## 致谢
 
