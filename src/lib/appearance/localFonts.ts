@@ -7,8 +7,8 @@
  * reachable by `font-family` alone, so a chosen family is also registered as a
  * `FontFace` ({@link registerSystemFont}).
  *
- * Consumers: the app-chrome font pickers (`@/lib/appearance`) and the document
- * fonts read for the compiler (`./documentFonts`).
+ * Consumers: the app-chrome font pickers only (Settings → Fonts); the compile
+ * pipeline never reads machine fonts.
  */
 
 /** The API bound to `window`, or `null` when unavailable (non-Chromium). */

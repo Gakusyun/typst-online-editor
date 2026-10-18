@@ -47,12 +47,6 @@ interface CodeEditorProps {
 	activeFilePath: string
 	onChange: (content: string) => void
 	onFileSelect: (path: string) => void
-	/**
-	 * Families the compile pipeline reads from the machine. The language server
-	 * has no font API of its own, so this only stops it from reporting them as
-	 * unknown (see `@/lib/lsp/tinymist.worker`).
-	 */
-	systemFontFamilies: string[]
 }
 
 const IMAGE_FILES = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
@@ -119,7 +113,6 @@ export default function CodeEditor({
 	activeFilePath,
 	onChange,
 	onFileSelect,
-	systemFontFamilies,
 }: CodeEditorProps) {
 	const { t } = useI18n()
 	const hostRef = useRef<HTMLDivElement | null>(null)
@@ -189,10 +182,6 @@ export default function CodeEditor({
 		// no editor view has synchronized yet.
 		lspClientRef.current?.sync()
 	}, [project])
-
-	useEffect(() => {
-		lspRef.current?.setSystemFontFamilies(systemFontFamilies)
-	}, [systemFontFamilies])
 
 	useEffect(() => {
 		if (isBinaryFile || !hostRef.current) return

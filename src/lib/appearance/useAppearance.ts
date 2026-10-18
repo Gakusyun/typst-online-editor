@@ -1,7 +1,7 @@
 import { createContext } from 'preact'
 import { useContext } from 'preact/hooks'
 import type { FontChoice } from './appearance'
-import type { SystemFontRegistrationError } from '@/lib/fonts/localFonts'
+import type { SystemFontRegistrationError } from './localFonts'
 
 /**
  * The font choices made in Settings. See `./appearance` for the persistence and

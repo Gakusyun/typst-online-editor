@@ -4,11 +4,6 @@ type CompileRequest = {
 	files: Record<string, string>;
 	mainFile: string;
 	images?: Record<string, Uint8Array<ArrayBuffer>>;
-	// Installed fonts the document references. `systemFontFamilies` is the full
-	// set this compile needs (the worker keeps those and releases the rest);
-	// `systemFonts` carries the data only for families it does not hold yet.
-	systemFontFamilies?: string[];
-	systemFonts?: Record<string, Uint8Array<ArrayBuffer>[]>;
 };
 
 type CompileResponse =
@@ -66,12 +61,10 @@ export class TypstWorkerClient {
 	compilePdf(
 		files: Record<string, string>,
 		mainFile: string,
-		images: Record<string, Uint8Array<ArrayBuffer>> = {},
-		systemFontFamilies: string[] = [],
-		systemFonts: Record<string, Uint8Array<ArrayBuffer>[]> = {}
+		images: Record<string, Uint8Array<ArrayBuffer>> = {}
 	): Promise<{ pdf: Uint8Array<ArrayBuffer>; diagnostics: string[] }> {
 		const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now());
-		const request: CompileRequest = { type: 'compile', id, files, mainFile, images, systemFontFamilies, systemFonts };
+		const request: CompileRequest = { type: 'compile', id, files, mainFile, images };
 
 		return new Promise((resolve, reject) => {
 			this.#pending.set(id, { resolve, reject });

@@ -15,15 +15,12 @@ import {
 	systemFontsUnavailableReason,
 	type SystemFontRegistrationError,
 	type SystemFontsUnavailableReason,
-} from '@/lib/fonts/localFonts'
+} from '@/lib/appearance/localFonts'
 import type { MessageKey } from '@/lib/i18n/messages'
 import { useAppearance } from '@/lib/appearance/useAppearance'
 
 interface SettingsDialogProps {
 	onClose: () => void
-	/** Whether the compiler reads installed fonts the document references. */
-	documentSystemFonts: boolean
-	onDocumentSystemFontsChange(enabled: boolean): void
 }
 
 /** Outcome of the last attempt to enumerate the machine's fonts. */
@@ -66,15 +63,13 @@ const FONT_ERROR_MESSAGE: Record<SystemFontRegistrationError, MessageKey> = {
 
 export default function SettingsDialog({
 	onClose,
-	documentSystemFonts,
-	onDocumentSystemFontsChange,
 }: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
 	const { uiFont, editorFont, uiFontError, editorFontError, setUiFont, setEditorFont } = useAppearance()
 	const [showFontFamilies, setShowFontFamilies] = useState(false)
 	const [systemFonts, setSystemFonts] = useState<SystemFontsState>(() => {
-		// Already enumerated in this session (a previous dialog, or the compile
-		// path): show the names again instead of asking for another click.
+		// Already enumerated in this session (a previous dialog): show the
+		// names again instead of asking for another click.
 		const cached = cachedSystemFonts()
 		return cached ? { status: 'ready', families: fontFamilies(cached) } : { status: 'idle' }
 	})
@@ -118,23 +113,6 @@ export default function SettingsDialog({
 			console.warn('[settings] could not list system fonts', error)
 			setSystemFonts(failureState(error))
 			return false
-		}
-	}
-
-	/**
-	 * The document fonts are read through the same permission as the pickers, and
-	 * only a user gesture can grant it — so the toggle itself performs the first
-	 * enumeration and reports the outcome; without it the feature cannot work, so
-	 * a failure leaves the toggle off.
-	 */
-	const toggleDocumentSystemFonts = async () => {
-		if (documentSystemFonts) {
-			onDocumentSystemFontsChange(false)
-			return
-		}
-		if (!fontsSupported) return
-		if (systemFonts.status === 'ready' || (await loadSystemFonts())) {
-			onDocumentSystemFontsChange(true)
 		}
 	}
 
@@ -268,20 +246,6 @@ export default function SettingsDialog({
 							)}
 						</div>
 						<p className="mt-2 text-xs text-gray-500">{t('settings.fontFamilyHint')}</p>
-
-						<label className="flex items-start gap-2 mt-4 cursor-pointer">
-							<input
-								type="checkbox"
-								checked={documentSystemFonts}
-								disabled={!fontsSupported}
-								onChange={() => void toggleDocumentSystemFonts()}
-								className="mt-0.5 accent-blue-500"
-							/>
-							<span className="text-sm text-gray-300">{t('settings.documentFontsAuto')}</span>
-						</label>
-						{fontsSupported && (
-							<p className="mt-2 text-xs text-gray-500">{t('settings.documentFontsHint')}</p>
-						)}
 					</div>
 
 					<div className="mt-5 pt-4 border-t border-gray-700">
@@ -306,27 +270,6 @@ export default function SettingsDialog({
 									))}
 								</ul>
 								<p className="mt-2 text-xs text-gray-400">{t('settings.fontFamiliesHint')}</p>
-
-								<div className="mt-3 pt-2 border-t border-gray-700">
-									{systemFonts.status === 'ready' ? (
-										<>
-											<p className="text-xs text-gray-300">
-												{t('settings.systemFontFamilies', { count: families.length })}
-											</p>
-											<ul className="mt-1 max-h-48 overflow-y-auto space-y-0.5">
-												{families.map((family) => (
-													<li key={family} className="text-sm font-mono text-gray-200">
-														{family}
-													</li>
-												))}
-											</ul>
-										</>
-									) : (
-										<p className="text-xs text-gray-500">
-											{t('settings.systemFontFamiliesHint')}
-										</p>
-									)}
-								</div>
 							</div>
 						)}
 					</div>

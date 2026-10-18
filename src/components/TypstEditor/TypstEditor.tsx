@@ -52,11 +52,7 @@ export default function TypstEditor() {
 		status,
 		pdfUrl,
 		errorMsg,
-		diagnostics,
 		hasCompiled,
-		documentSystemFonts,
-		setDocumentSystemFonts,
-		documentFontFamilies,
 		compileNow,
 		compileDebounced,
 	} = useTypstCompiler()
@@ -105,23 +101,6 @@ export default function TypstEditor() {
 		await compileNow(filesMap, currentProject.mainFile)
 	}
 
-	/**
-	 * Turning the feature on changes what the next compile can use, so compile
-	 * right away instead of waiting for the next edit — and turning it off has to
-	 * release the fonts the worker is holding, which also takes a compile.
-	 */
-	const handleDocumentSystemFonts = useCallback(
-		(enabled: boolean) => {
-			setDocumentSystemFonts(enabled)
-			const filesMap = currentProject.files.reduce<Record<string, string>>((acc, file) => {
-				acc[file.path] = file.content
-				return acc
-			}, {})
-			void compileNow(filesMap, currentProject.mainFile)
-		},
-		[currentProject, compileNow, setDocumentSystemFonts]
-	)
-
 	const handleDownload = () => {
 		if (pdfUrl) {
 			downloadPdfFromUrl(pdfUrl, 'document.pdf')
@@ -157,8 +136,6 @@ export default function TypstEditor() {
 			{isSettingsOpen && (
 				<SettingsDialog
 					onClose={() => setIsSettingsOpen(false)}
-					documentSystemFonts={documentSystemFonts}
-					onDocumentSystemFontsChange={handleDocumentSystemFonts}
 				/>
 			)}
 
@@ -201,7 +178,6 @@ export default function TypstEditor() {
 								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
 								onFileSelect={handleFileSelect}
-								systemFontFamilies={documentFontFamilies}
 							/>
 						</div>
 					</div>
@@ -215,7 +191,6 @@ export default function TypstEditor() {
 							pdfUrl={pdfUrl}
 							status={status}
 							errorMsg={errorMsg}
-							diagnostics={diagnostics}
 							hasCompiled={hasCompiled}
 							fileCount={currentProject.files.length}
 							charCount={getActiveFile()?.content.length || 0}
@@ -280,7 +255,6 @@ export default function TypstEditor() {
 								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
 								onFileSelect={handleFileSelect}
-								systemFontFamilies={documentFontFamilies}
 							/>
 						</div>
 
@@ -319,7 +293,6 @@ export default function TypstEditor() {
 								pdfUrl={pdfUrl}
 								status={status}
 								errorMsg={errorMsg}
-								diagnostics={diagnostics}
 								hasCompiled={hasCompiled}
 								fileCount={currentProject.files.length}
 								charCount={getActiveFile()?.content.length || 0}
