@@ -7,12 +7,13 @@
  * the compile that needs it and released as soon as that compile is done (the
  * worker drops the compiler that carried it), so system fonts never accumulate.
  *
- * Enabled per user in Settings; the enable click also grants the permission the
- * API needs, which is why the read must not require a user gesture itself.
+ * On by default: a document that names an installed family compiles with it
+ * without ceremony. Settings can switch it off, and its checkbox is also the
+ * user gesture that grants the permission the API needs on first use.
  */
-import { isSystemFontsSupported, querySystemFonts } from './localFonts'
+import { cachedSystemFonts, isSystemFontsSupported, querySystemFonts } from './localFonts'
 
-/** `localStorage` key: document system fonts are on when it is present. */
+/** `localStorage` key: document system fonts are off only when it says `'0'`. */
 const DOCUMENT_FONTS_KEY = 'typst-document-fonts'
 
 /** How far past a `font:` keyword the font argument is scanned for literals. */
@@ -32,13 +33,48 @@ export interface DocumentSystemFonts {
 /** Families the worker already received; their data is not read again. */
 const sentFamilies = new Set<string>()
 
+/** Why a family the source names did not reach the compiler. */
+export type DocumentFontMiss =
+	/** The feature is switched off in Settings. */
+	| 'disabled'
+	/** The browser cannot read local fonts at all (non-Chromium, or hidden API). */
+	| 'unsupported'
+	/** The API exists but refused: permission, opaque origin, or no user gesture. */
+	| 'denied'
+	/** No installed family goes by that name. */
+	| 'not-installed'
+	/** Installed, but its font data could not be read. */
+	| 'unreadable'
+
+/**
+ * Why `family` — a name the compile did not get — was left out. Used to explain
+ * the language server's `unknown font family` warning instead of leaving the
+ * user with a bare "not found".
+ */
+export function documentFontMiss(family: string): DocumentFontMiss {
+	if (!isDocumentSystemFontsEnabled()) return 'disabled'
+	if (!isSystemFontsSupported()) return 'unsupported'
+	const installed = cachedSystemFonts()
+	// Never enumerated: the API refused somewhere along the way.
+	if (installed === null) return 'denied'
+	const wanted = family.trim().toLowerCase()
+	if (!installed.some((font) => font.family.toLowerCase() === wanted)) return 'not-installed'
+	return 'unreadable'
+}
+
+/**
+ * On by default — a document naming an installed family should compile with it
+ * without ceremony. Reading machine fonts needs no user gesture once the
+ * permission is in place, and a refusal just falls back to the CDN fonts.
+ */
 export function isDocumentSystemFontsEnabled(): boolean {
-	return localStorage.getItem(DOCUMENT_FONTS_KEY) !== null
+	return localStorage.getItem(DOCUMENT_FONTS_KEY) !== '0'
 }
 
 export function setDocumentSystemFontsEnabled(enabled: boolean): void {
-	if (enabled) localStorage.setItem(DOCUMENT_FONTS_KEY, '1')
-	else localStorage.removeItem(DOCUMENT_FONTS_KEY)
+	// Absent means on: opting out is explicit, opting in writes nothing.
+	if (enabled) localStorage.removeItem(DOCUMENT_FONTS_KEY)
+	else localStorage.setItem(DOCUMENT_FONTS_KEY, '0')
 }
 
 /**

@@ -1,9 +1,15 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { LANGS, translate, type I18n, type Lang, type LangSetting } from './i18n'
+import {
+	LANGS,
+	LANG_STORAGE_KEY,
+	browserLang,
+	translate,
+	type I18n,
+	type Lang,
+	type LangSetting,
+} from './i18n'
 import { I18nContext } from './useI18n'
-
-const LANG_STORAGE_KEY = 'typst-lang'
 
 function isLang(value: string | null): value is Lang {
 	return value !== null && (LANGS as readonly string[]).includes(value)
@@ -11,12 +17,6 @@ function isLang(value: string | null): value is Lang {
 
 function isLangSetting(value: string | null): value is LangSetting {
 	return value === 'system' || isLang(value)
-}
-
-/** The browser language mapped onto a supported language. */
-function browserLang(): Lang {
-	const preferred = navigator.language.toLowerCase()
-	return LANGS.find((lang) => preferred.startsWith(lang)) ?? 'en'
 }
 
 /** Saved choice wins; a fresh install follows the system language. */

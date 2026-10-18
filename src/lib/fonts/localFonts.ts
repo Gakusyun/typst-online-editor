@@ -82,19 +82,31 @@ export function systemFontsUnavailableReason(): SystemFontsUnavailableReason | n
 /** Last enumeration: font metadata only (no font data), safe to keep around. */
 let cachedFonts: LocalFontData[] | null = null
 
+/** Why the last enumeration failed — kept so every compile does not retry. */
+let cachedFailure: unknown = null
+
 /**
  * Every installed font. Throws when the API is unsupported or the permission is
  * denied; requires a user gesture while the permission is still in `prompt`.
  *
  * The result is cached — both the pickers and every compile ask for it — until
- * `refresh` re-reads the machine's list.
+ * `refresh` re-reads the machine's list. A failure is cached too: a compile runs
+ * on every keystroke and must not hammer an API that already said no (the
+ * Settings dialog retries with `refresh` from an actual user gesture).
  */
 export async function querySystemFonts(options?: { refresh?: boolean }): Promise<LocalFontData[]> {
 	if (cachedFonts && !options?.refresh) return cachedFonts
+	if (cachedFailure && !options?.refresh) throw cachedFailure
 	const query = queryFn()
 	if (!query) throw new Error('Local Font Access API is not available')
-	cachedFonts = await query()
-	return cachedFonts
+	try {
+		cachedFonts = await query()
+		cachedFailure = null
+		return cachedFonts
+	} catch (error) {
+		cachedFailure = error
+		throw error
+	}
 }
 
 /**

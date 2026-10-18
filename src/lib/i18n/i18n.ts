@@ -37,6 +37,31 @@ export const LANG_LABELS: Record<Lang, string> = {
 	de: 'Deutsch',
 }
 
+/** Where the language choice is persisted; `system` follows the browser. */
+export const LANG_STORAGE_KEY = 'typst-lang'
+
+/** The browser language mapped onto a supported language. */
+export function browserLang(): Lang {
+	const preferred = navigator.language.toLowerCase()
+	return LANGS.find((lang) => preferred.startsWith(lang)) ?? 'en'
+}
+
+/**
+ * The language the UI renders in right now — for code outside React (the LSP
+ * client rewrites diagnostics and has no hook to ask). Reads the same persisted
+ * choice `I18nProvider` does.
+ */
+export function currentLang(): Lang {
+	try {
+		const saved = localStorage.getItem(LANG_STORAGE_KEY)
+		if (saved === 'system' || saved === null) return browserLang()
+		if ((LANGS as readonly string[]).includes(saved)) return saved as Lang
+	} catch {
+		// Private mode: no storage, fall through to the browser language.
+	}
+	return browserLang()
+}
+
 /** Values for the `{placeholder}` slots of a message. */
 export type MessageVars = Record<string, string | number>
 
