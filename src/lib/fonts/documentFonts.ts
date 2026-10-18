@@ -90,11 +90,17 @@ export async function loadDocumentSystemFonts(
 		for (const family of wanted) {
 			const faces = facesOfFamily(installed, family)
 			if (faces.length === 0) continue
+			const before = fonts.length
 			for (const face of faces) {
 				const blob = await face.blob()
+				// Some builds enumerate fonts but cannot read them (headless returns
+				// an empty blob): an empty face is not a font the compiler can use.
+				if (blob.size === 0) continue
 				fonts.push(new Uint8Array(await blob.arrayBuffer()) as Uint8Array<ArrayBuffer>)
 			}
-			families.push(family)
+			// Only families we actually read count as resolved: the language server
+			// filter trusts this list.
+			if (fonts.length > before) families.push(family)
 		}
 		console.log('[fonts] system fonts for this compile:', families.join(', ') || '(none)')
 		return { fonts, families }

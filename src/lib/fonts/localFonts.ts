@@ -1,5 +1,5 @@
 /**
- * System fonts through the Local Font Access API (`navigator.queryLocalFonts()`).
+ * System fonts through the Local Font Access API (`window.queryLocalFonts()`).
  *
  * Chromium-only and permission-gated: the first call needs a user gesture, and a
  * denied permission rejects with `NotAllowedError`/`SecurityError`. Enumeration
@@ -11,10 +11,10 @@
  * fonts read for the compiler (`./documentFonts`).
  */
 
-/** The API bound to `navigator`, or `null` when unavailable (non-Chromium). */
+/** The API bound to `window`, or `null` when unavailable (non-Chromium). */
 function queryFn(): (() => Promise<LocalFontData[]>) | null {
-	const query = typeof navigator === 'undefined' ? undefined : navigator.queryLocalFonts
-	return typeof query === 'function' ? query.bind(navigator) : null
+	const query = typeof window === 'undefined' ? undefined : window.queryLocalFonts
+	return typeof query === 'function' ? query.bind(window) : null
 }
 
 export function isSystemFontsSupported(): boolean {
@@ -140,6 +140,9 @@ export async function registerSystemFont(family: string, fonts?: LocalFontData[]
 		if (!match) return false
 		// `FontFace` wants a `BufferSource`, not the `Blob` the API hands out.
 		const file = await match.blob()
+		// A build that enumerates fonts without being able to read them returns an
+		// empty blob; there is nothing to register then.
+		if (file.size === 0) return false
 		const face = new FontFace(family, await file.arrayBuffer())
 		await face.load()
 		document.fonts.add(face)

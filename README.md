@@ -19,7 +19,7 @@
 - 已知限制：语言服务首次使用需从 CDN 下载约 12.8 MB 的 wasm；若下载失败，右上角显示「语言服务不可用」且不会自动重试——刷新页面即可恢复。语言服务与编译彼此独立，前者不可用时仍能正常编译并预览 PDF。
 - 文件浏览器、自定义 PDF 预览、防抖编译（输入即编译）。编译失败时保留上一次成功的 PDF 并提示错误，只有新产物编译成功才会替换旧产物。
 - 项目名可在侧栏直接修改；项目可导出为 zip（以项目名命名）、从 zip 导入；设置中可查看支持的 font family。
-- 字体全部通过 Local Font Access API（`navigator.queryLocalFonts()`）读取系统已装字体（仅 Chromium 支持、需授权；其它浏览器可直接手写字体名）：界面字体与编辑器字体可在「设置」中指定（编辑器字体同时用于编译报错信息）；文档里 `#set text(font: "…")` 引用的系统字体也会被自动读入编译器，**只在编译期间驻留内存，编译一结束立即释放**。详见[字体设置](#字体设置)。
+- 字体全部通过 Local Font Access API（`window.queryLocalFonts()`）读取系统已装字体（仅 Chromium 支持、需授权；其它浏览器可直接手写字体名）：界面字体与编辑器字体可在「设置」中指定（编辑器字体同时用于编译报错信息）；文档里 `#set text(font: "…")` 引用的系统字体也会被自动读入编译器，**只在编译期间驻留内存，编译一结束立即释放**。详见[字体设置](#字体设置)。
 - 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
@@ -86,7 +86,7 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 ## 字体设置
 
-设置分两类：应用自身的**界面 / 编辑器字体**（只影响 UI），以及**文档字体**（影响编译出的 PDF）。两类都通过 [Local Font Access API](https://developer.chrome.com/docs/capabilities/web-apis/local-fonts)（`navigator.queryLocalFonts()`）读取系统字体。该 API **仅 Chromium 系浏览器支持**且需要授权：首次调用必须由用户手势触发（因此做成按钮 / 复选框，不做自动加载）；拒绝授权或浏览器不支持时会给出提示，此时仍可手写字体名。`tsc` 所需的类型声明在 `src/types/local-fonts.d.ts`（TypeScript 7 的 `lib.dom` 尚未内置）。
+设置分两类：应用自身的**界面 / 编辑器字体**（只影响 UI），以及**文档字体**（影响编译出的 PDF）。两类都通过 [Local Font Access API](https://developer.chrome.com/docs/capabilities/web-apis/local-fonts)（`window.queryLocalFonts()`）读取系统字体。该 API **仅 Chromium 系浏览器支持**且需要授权：首次调用必须由用户手势触发（因此做成按钮 / 复选框，不做自动加载）；拒绝授权或浏览器不支持时会给出提示，此时仍可手写字体名。`tsc` 所需的类型声明在 `src/types/local-fonts.d.ts`（TypeScript 7 的 `lib.dom` 尚未内置）。
 
 ### 界面字体与编辑器字体
 
@@ -110,7 +110,7 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 ### 读不到系统字体？
 
-设置弹窗会直接说明**为什么**读不到（不再是一句笼统的「不支持」）：先在控制台执行 `typeof navigator.queryLocalFonts`，返回 `"undefined"` 就说明浏览器没有提供这个 API，再对照下表。
+设置弹窗会直接说明**为什么**读不到（不再是一句笼统的「不支持」）：先在控制台执行 `typeof window.queryLocalFonts`，返回 `"undefined"` 就说明浏览器没有提供这个 API，再对照下表。
 
 | 设置里的提示 | 原因 | 处理 |
 |---|---|---|
@@ -128,7 +128,7 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 如果提示与你的情况对不上，把控制台里这段的输出发出来即可定位：
 
 ```js
-({ api: typeof navigator.queryLocalFonts, ua: navigator.userAgent,
+({ api: typeof window.queryLocalFonts, ua: navigator.userAgent,
    mobile: navigator.userAgentData?.mobile, secure: window.isSecureContext,
    origin: location.origin, iframe: window.self !== window.top })
 ```

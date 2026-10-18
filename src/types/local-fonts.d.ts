@@ -1,5 +1,5 @@
 /**
- * Local Font Access API (W3C draft, Chromium-only) — `navigator.queryLocalFonts()`.
+ * Local Font Access API (W3C draft, Chromium-only) — `window.queryLocalFonts()`.
  *
  * TypeScript 7's `lib.dom` does not declare it, so the parts this app uses are
  * declared here (this file has no imports, so it augments the global scope).
@@ -21,6 +21,7 @@ interface QueryLocalFontsOptions {
 	postscriptNames?: string[]
 }
 
-interface Navigator {
+interface Window {
+	/** The method lives on `Window` (spec: `partial interface Window`). */
 	queryLocalFonts?(options?: QueryLocalFontsOptions): Promise<LocalFontData[]>
 }
