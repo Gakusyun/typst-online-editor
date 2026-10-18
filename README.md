@@ -114,12 +114,24 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
 
 | 设置里的提示 | 原因 | 处理 |
 |---|---|---|
-| 浏览器没有提供 Local Font Access API | 只有桌面版 Chromium 实现：Chrome / Edge 103+；Firefox、Safari、手机浏览器（含 Chrome for Android）、应用内浏览器与 WebView 都没有 | 换桌面版 Chrome / Edge；不换浏览器的话，文档字体只能靠上传字体文件或 CDN 字体 |
+| 浏览器没有提供 Local Font Access API | 桌面版 Chromium 之外都没有实现：Firefox、Safari 均无；Chrome / Edge 103+ 桌面版才有 | 换桌面版 Chrome / Edge；不换浏览器的话，文档字体只能靠上传字体文件或 CDN 字体 |
+| 手机 / 平板浏览器没有实现 | 移动端从未实现（Chrome for Android、Edge for Android、三星浏览器都无） | 在电脑上用桌面版 Chrome / Edge |
+| iOS / iPadOS 上都是 WebKit | iPhone / iPad 上的 Chrome、Edge、Firefox 都是 WebKit 内核 | 在电脑上用桌面版 Chrome / Edge |
+| 运行在应用内浏览器 / WebView | 微信、飞书、钉钉、QQ 等内置浏览器，Electron 应用，IDE 内置预览 | 用独立的桌面版 Chrome / Edge 打开 |
+| 检测到桌面版 Chromium 但没有该 API | 版本低于 103、启动参数 / 企业策略禁用，或 Brave、Vivaldi、360、QQ 浏览器等派生浏览器移除 / 改写了 API（UA 与 Chrome 几乎一致） | 看 `chrome://version` 的版本与「命令行」里是否有 `--disable-features`；用官方 Chrome / Edge 打开同一地址对比 |
 | 不是安全上下文 | 页面用 `http://` 加非 localhost（例如局域网 IP）打开，浏览器根本不会暴露该 API | 用 `https://` 或 `http://localhost` 打开 |
 | 来源是不透明 origin | 直接 `file://` 双击打开 HTML | `http://localhost`（`pnpm preview`）或 https |
 | 被嵌入在 iframe 中 | 外层页面没允许 `local-fonts`（默认只允许同源） | 外层 iframe 加 `allow="local-fonts"` |
 | 浏览器阻止了字体读取（SecurityError） | 权限策略、来源不被信任，或该调用不是由用户操作触发 | 用按钮 / 复选框触发（本就是用户手势）；检查站点的权限策略 |
 | 系统字体访问被拒绝 | 在权限弹窗里点了「拒绝」 | 在地址栏站点设置里重新允许「字体」权限后重试 |
+
+如果提示与你的情况对不上，把控制台里这段的输出发出来即可定位：
+
+```js
+({ api: typeof navigator.queryLocalFonts, ua: navigator.userAgent,
+   mobile: navigator.userAgentData?.mobile, secure: window.isSecureContext,
+   origin: location.origin, iframe: window.self !== window.top })
+```
 
 ## 致谢
 

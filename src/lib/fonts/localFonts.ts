@@ -26,7 +26,7 @@ export function isSystemFontsSupported(): boolean {
  *
  * The API is desktop-Chromium-only (Chrome/Edge 103+: `chrome_android`,
  * `webview_*`, Firefox and Safari all report no support) *and* needs a secure
- * context, so the interesting cases are the ones the user can fix.
+ * context, so every case below is one the user can act on.
  */
 export type SystemFontsUnavailableReason =
 	/** `http://` on a non-localhost host: the API is never exposed. */
@@ -35,14 +35,47 @@ export type SystemFontsUnavailableReason =
 	| 'opaque-origin'
 	/** Cross-origin iframe whose parent did not allow `local-fonts`. */
 	| 'embedded'
-	/** Right environment, browser without the API (Firefox, Safari, mobile). */
+	/** In-app browser / WebView / Electron shell (IDE preview panes). */
+	| 'webview'
+	/** iOS and iPadOS: every browser there is WebKit, Chrome included. */
+	| 'ios'
+	/** Phone/tablet: the API was never implemented for mobile. */
+	| 'mobile'
+	/** Desktop Chromium that still lacks it (old version, flag, policy, fork). */
 	| 'unsupported'
+
+/** Chromium's own device hint; TS 7's `lib.dom` may not declare it, hence the cast. */
+function isMobileDevice(): boolean {
+	const hint = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
+	// Either signal suffices: a phone user agent with a stale client hint must
+	// still count as mobile.
+	return hint?.mobile === true || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+}
+
+/** iOS/iPadOS — iPadOS 13+ sends a desktop Macintosh UA and only touch points give it away. */
+function isIosDevice(): boolean {
+	const ua = navigator.userAgent
+	return (
+		/iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/.test(ua) ||
+		(/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+	)
+}
+
+/** In-app browsers, WebViews and Electron shells — none of them ship this API. */
+function isEmbeddedBrowser(): boolean {
+	return /; wv\)|WebView|Electron\/|MicroMessenger|QQBrowser|Quark|UCBrowser|Lark|DingTalk/i.test(
+		navigator.userAgent
+	)
+}
 
 export function systemFontsUnavailableReason(): SystemFontsUnavailableReason | null {
 	if (isSystemFontsSupported()) return null
 	if (!window.isSecureContext) return 'insecure-context'
 	if (window.location.origin === 'null') return 'opaque-origin'
 	if (window.self !== window.top) return 'embedded'
+	if (isEmbeddedBrowser()) return 'webview'
+	if (isIosDevice()) return 'ios'
+	if (isMobileDevice()) return 'mobile'
 	return 'unsupported'
 }
 

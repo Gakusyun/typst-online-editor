@@ -47,6 +47,9 @@ const FONTS_UNAVAILABLE_MESSAGE: Record<SystemFontsUnavailableReason, MessageKey
 	'insecure-context': 'settings.fontsInsecureContext',
 	'opaque-origin': 'settings.fontsOpaqueOrigin',
 	embedded: 'settings.fontsEmbedded',
+	webview: 'settings.fontsWebViewBrowser',
+	ios: 'settings.fontsIosBrowser',
+	mobile: 'settings.fontsMobileBrowser',
 	unsupported: 'settings.fontsUnsupported',
 }
 
