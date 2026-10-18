@@ -9,6 +9,9 @@
 # testing
 /coverage
 
+# playwright-cli session output (snapshots, console logs)
+.playwright-cli/
+
 # misc
 .DS_Store
 *.pem

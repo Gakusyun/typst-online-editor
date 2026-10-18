@@ -26,30 +26,39 @@ const EDITOR_DEFAULT_WIDTH = 500
 const PREVIEW_MIN_WIDTH = 440 // Minimum width for PDF preview (toolbar requires 400px)
 const PREVIEW_COLLAPSED_WIDTH = 48
 
+/**
+ * Below this the workspace cannot give the panel its width (`--ai-panel-width`)
+ * without squeezing the editor (or clipping the preview out of the window), so
+ * the panel covers the workspace instead of reserving room in it.
+ */
+const AI_DOCK_MIN_WIDTH = 1100
+
 export default function TypstEditor() {
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 	const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
+	const [isNarrow, setIsNarrow] = useState(false)
 	/** Non-null while the settings dialog is open — and which page it opens on. */
 	const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
 	const [isAiOpen, setIsAiOpen] = useState(false)
-	
-	// Mobile detection
+	/** True while the preview is collapsed only because the AI panel took its room. */
+	const [previewCollapsedByAi, setPreviewCollapsedByAi] = useState(false)
+
+	// Layout breakpoints: below 768px the editor stacks (mobile layout), and
+	// below 1100px there is no room to dock the AI panel beside the editor.
 	useEffect(() => {
-		const mediaQuery = window.matchMedia('(max-width: 768px)')
-		
-		const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
-			setIsMobile(e.matches)
+		const mobile = window.matchMedia('(max-width: 768px)')
+		const narrow = window.matchMedia(`(max-width: ${AI_DOCK_MIN_WIDTH - 1}px)`)
+		const sync = () => {
+			setIsMobile(mobile.matches)
+			setIsNarrow(narrow.matches)
 		}
-		
-		// Set initial value
-		handleMediaChange(mediaQuery)
-		
-		// Listen for changes
-		mediaQuery.addEventListener('change', handleMediaChange)
-		
+		sync()
+		mobile.addEventListener('change', sync)
+		narrow.addEventListener('change', sync)
 		return () => {
-			mediaQuery.removeEventListener('change', handleMediaChange)
+			mobile.removeEventListener('change', sync)
+			narrow.removeEventListener('change', sync)
 		}
 	}, [])
 	
@@ -87,6 +96,34 @@ export default function TypstEditor() {
 
 	const { settings: aiSettings, updateSettings: updateAiSettings } = useAiSettings()
 	const selectionStore = useEditorSelection()
+
+	// A docked panel takes its width from the workspace, and the only column that
+	// can give it up is the preview — the sidebar and the editor are resizable
+	// columns whose minimums the app already commits to. So opening the panel
+	// collapses the preview and closing it hands the room back; the two never
+	// overlap, which is what used to leave the preview's toolbar unclickable.
+	const aiDocked = !isMobile && !isNarrow
+	const closeAi = useCallback(() => {
+		setIsAiOpen(false)
+		if (previewCollapsedByAi) {
+			setIsPreviewCollapsed(false)
+			setPreviewCollapsedByAi(false)
+		}
+	}, [previewCollapsedByAi])
+	const openAi = () => {
+		if (aiDocked && !isPreviewCollapsed) {
+			setIsPreviewCollapsed(true)
+			setPreviewCollapsedByAi(true)
+		}
+		setIsAiOpen(true)
+	}
+	/** The preview's own toggle; expanding it hands the room back to the preview. */
+	const togglePreview = () => {
+		const expanding = isPreviewCollapsed
+		if (expanding && isAiOpen && aiDocked) closeAi()
+		setIsPreviewCollapsed(!expanding)
+		if (expanding) setPreviewCollapsedByAi(false)
+	}
 
 	// The AI panel reads the project lazily — it must see the buffer as of the
 	// moment a request is sent, not as of the last render — so it gets refs.
@@ -193,7 +230,7 @@ export default function TypstEditor() {
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
 				onOpenSettings={() => setSettingsTab('general')}
-				onToggleAi={() => setIsAiOpen((open) => !open)}
+				onToggleAi={() => (isAiOpen ? closeAi() : openAi())}
 			/>
 
 			{settingsTab && (
@@ -208,10 +245,11 @@ export default function TypstEditor() {
 			{/* Mounted while closed too, so the conversation survives a close. */}
 			<AiAssistantPanel
 				isOpen={isAiOpen && settingsTab === null}
-				onClose={() => setIsAiOpen(false)}
+				onClose={closeAi}
 				activeFilePath={activeFilePath}
 				settings={aiSettings}
 				selectionStore={selectionStore}
+				docked={aiDocked}
 				getTarget={getAiTarget}
 				onApply={applyAiEdit}
 				onOpenSettings={() => setSettingsTab('ai')}
@@ -274,13 +312,17 @@ export default function TypstEditor() {
 							fileCount={currentProject.files.length}
 							charCount={getActiveFile()?.content.length || 0}
 							isCollapsed={isPreviewCollapsed}
-							onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+							onToggleCollapse={togglePreview}
 						/>
 					</div>
 				</div>
 			) : (
 				/* Desktop Layout: Sidebar | Editor + Preview */
-				<div className="flex flex-1 overflow-hidden">
+				<div
+					// Reserved, not overlaid: the workspace is narrower while the panel
+					// is docked, so no control ever sits under it.
+					className={`flex flex-1 overflow-hidden ${isAiOpen && aiDocked ? 'pr-[var(--ai-panel-width)]' : ''}`}
+				>
 					{/* File Explorer Sidebar */}
 					<div 
 						style={{ 
@@ -377,7 +419,7 @@ export default function TypstEditor() {
 								fileCount={currentProject.files.length}
 								charCount={getActiveFile()?.content.length || 0}
 								isCollapsed={isPreviewCollapsed}
-								onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+								onToggleCollapse={togglePreview}
 							/>
 						</div>
 					</div>

@@ -12,6 +12,12 @@
 		'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 	--app-editor-font-fallback: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
 		'Courier New', monospace;
+	/**
+	 * Width of the AI assistant panel (`AiAssistantPanel`) — and, while it is
+	 * docked, the room the workspace reserves for it (`TypstEditor`). One
+	 * property so the two can never disagree.
+	 */
+	--ai-panel-width: 420px;
 }
 
 @theme {
