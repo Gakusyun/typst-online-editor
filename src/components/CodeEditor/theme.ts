@@ -11,11 +11,14 @@ export const editorTheme = EditorView.theme({
 		backgroundColor: 'transparent',
 		fontSize: '14px',
 		height: '100%',
-		// Set on the editor root, not `.cm-scroller`: tooltips and panels are
-		// siblings of the scroller and must follow the same font.
+		// Set on the editor root (tooltips and panels are siblings of the scroller
+		// and must follow the same font) *and* on `.cm-scroller`: CodeMirror's base
+		// theme sets `font-family: monospace` there, which would otherwise win and
+		// pin the text to the default stack.
 		fontFamily: EDITOR_FONT_STACK,
 	},
 	'.cm-scroller': {
+		fontFamily: EDITOR_FONT_STACK,
 		lineHeight: '1.625',
 		overflow: 'auto',
 		padding: '1rem 0',

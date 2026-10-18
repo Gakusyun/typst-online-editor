@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'preact/hooks'
 import { getPdfjs } from '@/lib/pdf/pdfjs'
-import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 
 interface UsePdfRendererProps {
 	pdfUrl: string | null
@@ -20,6 +20,8 @@ const PDFJS_FONT_FACE = /^g_d\d+_f\d+$/
 
 export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageChange }: UsePdfRendererProps) {
 	const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null)
+	// Loading task per loaded document: only it can destroy what it created.
+	const loadingTasks = useRef(new WeakMap<PDFDocumentProxy, PDFDocumentLoadingTask>())
 	const [totalPages, setTotalPages] = useState(1)
 	const [isRendering, setIsRendering] = useState(false)
 	const [containerWidth, setContainerWidth] = useState(0)
@@ -45,10 +47,14 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 				const pdfjs = await getPdfjs()
 				const loadingTask = pdfjs.getDocument({ url: pdfUrl })
 				const pdf = await loadingTask.promise
-				
+
 				if (mounted) {
+					loadingTasks.current.set(pdf, loadingTask)
 					setPdfDoc(pdf)
 					setTotalPages(pdf.numPages)
+				} else {
+					// Replaced or unmounted while loading: nothing will ever render it.
+					void loadingTask.destroy()
 				}
 			} catch (error) {
 				console.error('Failed to load PDF:', error)
@@ -301,6 +307,19 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 			})
 		}
 	}, [pdfDoc, zoom, containerWidth, isCollapsed])
+
+	// A loaded document holds the parsed PDF, its pages and its fonts, and every
+	// successful compile produces a new one: the replaced one must be destroyed
+	// or the tab grows until it dies. pdf.js exposes destruction on the loading
+	// task rather than on `PDFDocumentProxy`, hence the pairing. Declared after
+	// the render effect on purpose — that one cancels the in-flight render tasks
+	// first.
+	useEffect(() => {
+		const task = pdfDoc ? loadingTasks.current.get(pdfDoc) : undefined
+		return () => {
+			void task?.destroy()
+		}
+	}, [pdfDoc])
 
 	// Set up IntersectionObserver to track visible pages
 	useEffect(() => {
