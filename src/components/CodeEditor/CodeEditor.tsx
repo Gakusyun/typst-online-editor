@@ -42,11 +42,20 @@ import { ProjectWorkspace, pathToUri } from '@/lib/lsp/projectWorkspace'
 import type { Project } from '@/lib/storage/ProjectStorage'
 import { editorHighlighting, editorTheme } from './theme'
 
+/** The editor's current selection; `null` when it is empty (a bare cursor). */
+export interface EditorSelection {
+	from: number
+	to: number
+	text: string
+}
+
 interface CodeEditorProps {
 	project: Project
 	activeFilePath: string
 	onChange: (content: string) => void
 	onFileSelect: (path: string) => void
+	/** Reported whenever the selection changes (the AI panel feeds off it). */
+	onSelectionChange?: (selection: EditorSelection | null) => void
 }
 
 const IMAGE_FILES = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
@@ -108,11 +117,19 @@ function typstLanguage(): LanguageSupport {
 	return new LanguageSupport(support.language, parts)
 }
 
+/** The non-empty selection of `view`, or `null` (a bare cursor is not one). */
+function readSelection(view: EditorView): EditorSelection | null {
+	const range = view.state.selection.main
+	if (range.empty) return null
+	return { from: range.from, to: range.to, text: view.state.sliceDoc(range.from, range.to) }
+}
+
 export default function CodeEditor({
 	project,
 	activeFilePath,
 	onChange,
 	onFileSelect,
+	onSelectionChange,
 }: CodeEditorProps) {
 	const { t } = useI18n()
 	const hostRef = useRef<HTMLDivElement | null>(null)
@@ -123,12 +140,14 @@ export default function CodeEditor({
 	const projectRef = useRef(project)
 	const onChangeRef = useRef(onChange)
 	const onFileSelectRef = useRef(onFileSelect)
+	const onSelectionChangeRef = useRef(onSelectionChange)
 	const [lspStatus, setLspStatus] = useState<TinymistLspStatus>('loading')
 	const [lspStatusDetail, setLspStatusDetail] = useState<string | undefined>()
 
 	projectRef.current = project
 	onChangeRef.current = onChange
 	onFileSelectRef.current = onFileSelect
+	onSelectionChangeRef.current = onSelectionChange
 
 	const fileExtension = activeFilePath.split('.').pop()?.toLowerCase() || ''
 	const isImageFile = IMAGE_FILES.includes(fileExtension)
@@ -193,6 +212,9 @@ export default function CodeEditor({
 			editorHighlighting,
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) onChangeRef.current(update.state.doc.toString())
+				if (update.selectionSet || update.docChanged) {
+					onSelectionChangeRef.current?.(readSelection(update.view))
+				}
 			}),
 		]
 		if (isTypstFile && client) {
@@ -203,24 +225,44 @@ export default function CodeEditor({
 			parent: hostRef.current,
 		})
 		viewRef.current = view
+		onSelectionChangeRef.current?.(readSelection(view))
 		return () => {
 			// Flush pending edits of the old file before its plugin goes away.
 			lspClientRef.current?.sync()
 			view.destroy()
 			viewRef.current = null
+			onSelectionChangeRef.current?.(null)
 		}
 		// content is read from the project snapshot at (re)creation time; later
 		// external edits are applied by the sync effect below.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeFilePath, isBinaryFile, isTypstFile])
 
-	// Apply externally-driven content changes (import, undo via storage, …).
+	// Apply externally-driven content changes (AI edits, import, undo, …).
 	useEffect(() => {
 		const view = viewRef.current
 		if (!view || isBinaryFile) return
-		if (view.state.doc.toString() !== content) {
-			view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } })
+		const current = view.state.doc.toString()
+		if (current === content) return
+		// Replace only the differing middle instead of the whole document: a
+		// full-document change maps the cursor to the end of the file, while a
+		// localized change carries the cursor and selection along with it.
+		let start = 0
+		const shortest = Math.min(current.length, content.length)
+		while (start < shortest && current[start] === content[start]) start += 1
+		let currentEnd = current.length
+		let contentEnd = content.length
+		while (
+			currentEnd > start &&
+			contentEnd > start &&
+			current[currentEnd - 1] === content[contentEnd - 1]
+		) {
+			currentEnd -= 1
+			contentEnd -= 1
 		}
+		view.dispatch({
+			changes: { from: start, to: currentEnd, insert: content.slice(start, contentEnd) },
+		})
 	}, [content, isBinaryFile])
 
 	const lspStatusText =

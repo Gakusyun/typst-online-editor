@@ -21,7 +21,8 @@
 - 项目名可在侧栏直接修改；项目可导出为 zip（以项目名命名）、从 zip 导入；设置中可查看支持的 font family。
 - 界面字体与编辑器字体可在「设置」中指定（编辑器字体同时用于编译报错信息），候选字体通过 Local Font Access API（`window.queryLocalFonts()`）枚举系统已装字体（仅 Chromium 支持、需授权；其它浏览器可直接手写字体名）。**编译不读取本机字体**，文档字体请用随项目上传的字体文件或 CDN 字体。详见[字体设置](#字体设置)。
 - 界面多语言（简体中文 / English / Deutsch），默认跟随浏览器语言，可手动切换并记忆。
-- 设置弹窗分页（通用 / 字体 / 关于），内容区独立滚动。
+- 可选 AI 助手（顶栏 ✨ 按钮）：用自然语言改写当前文件或选中片段，直连任意 OpenAI 兼容接口（URL / API Key 由用户自填、只存本地），内置一份精简版中文 Typst 提示词。详见 [AI 助手](#ai-助手)。
+- 设置弹窗分页（通用 / 字体 / AI / 关于），内容区独立滚动。
 - 可移植。UI 未必与框架无关，但编译逻辑是通用的。更精简的版本见 [simple-typst-editor](https://github.com/Mapaor4/simple-typst-editor)，另有 Vite 精简版 [typst-online-vite](https://github.com/Mapaor/typst-online-vite)。
 
 ## 使用与部署
@@ -125,14 +126,41 @@ Vite 的构建产物本身就是纯静态的 HTML+CSS+JS，无需修改任何配
    origin: location.origin, iframe: window.self !== window.top })
 ```
 
+## AI 助手
+
+编辑器内置一个可选的 AI 助手（顶栏的 ✨ 按钮），按自然语言要求改写当前文件或选中的片段。不配置就不启用，不影响任何其它功能。
+
+- **只支持 OpenAI 格式**：请求 `POST {你填的地址}/chat/completions`，头 `Authorization: Bearer <API Key>`，体 `{ model, messages, stream: true }`。OpenAI、DeepSeek、Moonshot、Ollama、LM Studio、vLLM 等兼容端点都能用；**不支持 Anthropic 等其它格式**。
+- **浏览器直连、无后端**：本项目没有服务器，请求由浏览器直接发往你配置的地址，因此该地址必须允许跨域（CORS）——本地服务（Ollama / LM Studio 等）需要显式开启 CORS。
+- **配置只存在本地**：接口地址、API Key、模型名、系统提示词都存在 `localStorage`（键 `typst-ai-settings`），API Key 只在请求你填写的那个接口时作为 `Authorization` 头发送，不会上传到本项目或任何第三方。
+- **先看后写**：回复流式显示在面板里，点「应用」才写入文档（也可以只复制）。改写范围可选「选中片段」或「整个文件」，应用时按**发送时**的范围精确替换；若期间切换了文件，应用按钮会禁用并提示，避免改错文件。
+- **内置精简版中文 Typst 提示词**：默认系统提示词精简自 [Gakusyun/typst-author-chinese](https://github.com/Gakusyun/typst-author-chinese)（面向中文排版的 Typst skill），并按本编辑器的环境改写：
+  - 只用随编辑器加载的字体（`Noto Sans CJK SC`、`Libertinus Serif`、`New Computer Modern`、`New Computer Modern Math`、`DejaVu Sans Mono`、`IBM Plex Sans`、`Noto Color Emoji`）与项目里上传的字体文件；**禁止写 SimSun / 黑体 / 楷体 / 仿宋 / Times New Roman 等本机字体名**（浏览器内的编译器没有它们）。
+  - 中文排版要点：`lang: "zh"`、`first-line-indent: (amount: 2em, all: true)`、两端对齐、按中文字号取磅值、A4 边距建议等。
+  - 环境限制：没有 `typst` 命令行，不要输出 CLI 命令；可用 Typst Universe 包（需联网）。
+  - 提示词可在「设置 → AI」里直接编辑；改回默认内容即继续跟随内置版本（内置版更新后自动生效）。
+- 交互：`Ctrl/Cmd + Enter` 发送、「停止」中断流式输出、🗑 清空对话。
+
+### 配置
+
+「设置 → AI」共四项：
+
+| 字段 | 说明 |
+|---|---|
+| 接口地址（Base URL） | 基址（如 `https://api.openai.com/v1`，会自动补 `/chat/completions`）或完整的 `…/chat/completions` 地址；裸主机名会补 `/v1/chat/completions` |
+| API Key | 仅本地保存；不需要鉴权的本地服务可留空 |
+| 模型 | 该接口接受的模型名，如 `gpt-4o-mini`、`deepseek-chat` |
+| 系统提示词 | 默认即内置的精简版中文 Typst 提示词，可编辑或一键恢复默认 |
+
 ## 设置弹窗
 
-「设置」（右上角齿轮）分三页，左侧页签切换，右侧内容区独立滚动：
+「设置」（右上角齿轮）分四页，左侧页签切换，右侧内容区独立滚动：
 
 | 页签 | 内容 |
 |---|---|
 | 通用 | 界面语言（跟随系统 / 简体中文 / English / Deutsch） |
 | 字体 | 界面字体、编辑器字体、读取系统字体、查看编译支持的 Font Family |
+| AI | AI 助手的接口地址、API Key、模型、系统提示词 |
 | 关于 | 版本号 |
 
 ## 致谢

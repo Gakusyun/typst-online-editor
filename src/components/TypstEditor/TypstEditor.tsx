@@ -1,15 +1,19 @@
 
-import { useState, useCallback, useEffect } from 'preact/hooks'
+import { useState, useCallback, useEffect, useRef } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
 import FileExplorer from '../FileExplorer'
 import TypstEditorHeader from './TypstEditorHeader'
 import SettingsDialog, { type SettingsTab } from './SettingsDialog'
 import CodeEditor from '../CodeEditor'
+import AiAssistantPanel from '../AiAssistant/AiAssistantPanel'
 import PdfPreview from '../PDFViewer'
 import ResizeHandle from './ResizeHandle'
+import type { AiEditScope, AiEditTarget } from '@/lib/ai/prompt'
 import { useTypstCompiler } from './hooks/useTypstCompiler'
 import { useProjectManagement } from './hooks/useProjectManagement'
 import { useResizePanel } from './hooks/useResizePanel'
+import { useAiSettings } from './hooks/useAiSettings'
+import { useEditorSelection } from './hooks/useEditorSelection'
 
 const SIDEBAR_MIN_WIDTH = 200
 const SIDEBAR_MAX_WIDTH = 600
@@ -28,6 +32,7 @@ export default function TypstEditor() {
 	const [isMobile, setIsMobile] = useState(false)
 	/** Non-null while the settings dialog is open — and which page it opens on. */
 	const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+	const [isAiOpen, setIsAiOpen] = useState(false)
 	
 	// Mobile detection
 	useEffect(() => {
@@ -79,6 +84,61 @@ export default function TypstEditor() {
 		handleProjectImport,
 		handleProjectExport,
 	} = useProjectManagement(handleProjectChange)
+
+	const { settings: aiSettings, updateSettings: updateAiSettings } = useAiSettings()
+	const selectionStore = useEditorSelection()
+
+	// The AI panel reads the project lazily — it must see the buffer as of the
+	// moment a request is sent, not as of the last render — so it gets refs.
+	const latestRef = useRef({ files: currentProject.files, activeFilePath })
+	latestRef.current = { files: currentProject.files, activeFilePath }
+	const updateContentRef = useRef(updateActiveFileContent)
+	updateContentRef.current = updateActiveFileContent
+
+	/** What the model may rewrite, snapshotted when a request is sent. */
+	const getAiTarget = useCallback(
+		(scope: AiEditScope): AiEditTarget => {
+			const { files, activeFilePath } = latestRef.current
+			const content = files.find((file) => file.path === activeFilePath)?.content ?? ''
+			const selection = selectionStore.get()
+			if (scope === 'selection' && selection) {
+				return {
+					path: activeFilePath,
+					files: files.map((file) => file.path),
+					code: selection.text,
+					scope,
+					selection: { from: selection.from, to: selection.to },
+				}
+			}
+			return {
+				path: activeFilePath,
+				files: files.map((file) => file.path),
+				code: content,
+				scope: 'document',
+				selection: null,
+			}
+		},
+		[selectionStore]
+	)
+
+	/**
+	 * Write a reply back into the document: the whole file when the request was
+	 * made against the whole file, otherwise exactly the range it was made
+	 * against. Edits only land in the file they were requested from.
+	 */
+	const applyAiEdit = useCallback((code: string, target: AiEditTarget) => {
+		const { files, activeFilePath } = latestRef.current
+		if (target.path !== activeFilePath || code.trim() === '') return
+		const content = files.find((file) => file.path === activeFilePath)?.content ?? ''
+		let next = code
+		if (target.scope === 'selection' && target.selection) {
+			// The document may have shrunk while the model was answering.
+			const from = Math.min(target.selection.from, content.length)
+			const to = Math.min(target.selection.to, content.length)
+			next = content.slice(0, from) + code + content.slice(to)
+		}
+		if (next !== content) updateContentRef.current(next)
+	}, [])
 	
 	// Sidebar resize (left panel)
 	const sidebarResize = useResizePanel({
@@ -129,14 +189,33 @@ export default function TypstEditor() {
 				hasCompiled={hasCompiled}
 				pdfUrl={pdfUrl}
 				isMobile={isMobile}
+				aiOpen={isAiOpen}
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
 				onOpenSettings={() => setSettingsTab('general')}
+				onToggleAi={() => setIsAiOpen((open) => !open)}
 			/>
 
 			{settingsTab && (
-				<SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />
+				<SettingsDialog
+					initialTab={settingsTab}
+					onClose={() => setSettingsTab(null)}
+					aiSettings={aiSettings}
+					onAiSettingsChange={updateAiSettings}
+				/>
 			)}
+
+			{/* Mounted while closed too, so the conversation survives a close. */}
+			<AiAssistantPanel
+				isOpen={isAiOpen && settingsTab === null}
+				onClose={() => setIsAiOpen(false)}
+				activeFilePath={activeFilePath}
+				settings={aiSettings}
+				selectionStore={selectionStore}
+				getTarget={getAiTarget}
+				onApply={applyAiEdit}
+				onOpenSettings={() => setSettingsTab('ai')}
+			/>
 
 			{isMobile ? (
 				/* Mobile Layout: Sidebar + Editor on top, Preview below */
@@ -177,6 +256,7 @@ export default function TypstEditor() {
 								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
 								onFileSelect={handleFileSelect}
+								onSelectionChange={selectionStore.set}
 							/>
 						</div>
 					</div>
@@ -254,6 +334,7 @@ export default function TypstEditor() {
 								activeFilePath={activeFilePath}
 								onChange={updateActiveFileContent}
 								onFileSelect={handleFileSelect}
+								onSelectionChange={selectionStore.set}
 							/>
 						</div>
 

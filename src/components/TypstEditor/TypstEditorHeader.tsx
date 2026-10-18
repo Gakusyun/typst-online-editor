@@ -1,6 +1,7 @@
 
 import type { ComponentChildren } from 'preact'
-import { Settings, Loader2, CheckCircle2, XCircle, Check, Zap } from 'lucide-preact'
+import { useEffect, useRef } from 'preact/hooks'
+import { Settings, Loader2, CheckCircle2, XCircle, Check, Zap, Sparkles } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { useI18n } from '@/lib/i18n/useI18n'
 
@@ -19,9 +20,11 @@ interface TypstEditorHeaderProps {
 	hasCompiled: boolean
 	pdfUrl: string | null
 	isMobile: boolean
+	aiOpen: boolean
 	onCompileNow: () => void
 	onDownload: () => void
 	onOpenSettings: () => void
+	onToggleAi: () => void
 }
 
 export default function TypstEditorHeader({
@@ -29,11 +32,32 @@ export default function TypstEditorHeader({
 	hasCompiled,
 	pdfUrl,
 	isMobile,
+	aiOpen,
 	onCompileNow,
 	onDownload,
 	onOpenSettings,
+	onToggleAi,
 }: TypstEditorHeaderProps) {
 	const { t } = useI18n()
+	const rootRef = useRef<HTMLDivElement | null>(null)
+
+	// The AI drawer is fixed to the right edge and must not cover this bar, but
+	// the bar wraps on narrow screens — so publish its live height instead of
+	// hard-coding one. See `AiAssistantPanel`.
+	useEffect(() => {
+		const node = rootRef.current
+		if (!node) return
+		const publish = () =>
+			document.documentElement.style.setProperty('--app-header-height', `${node.offsetHeight}px`)
+		publish()
+		const observer = new ResizeObserver(publish)
+		observer.observe(node)
+		return () => {
+			observer.disconnect()
+			document.documentElement.style.removeProperty('--app-header-height')
+		}
+	}, [])
+
 	const getStatusText = (): ComponentChildren => {
 		const textSizeClass = isMobile ? 'text-xs' : ''
 		switch (status) {
@@ -76,7 +100,10 @@ export default function TypstEditorHeader({
 	}
 
 	return (
-		<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 px-4 py-1.5 bg-gray-800 border-b border-gray-700">
+		<div
+			ref={rootRef}
+			className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 px-4 py-1.5 bg-gray-800 border-b border-gray-700"
+		>
 			<div className="flex items-center gap-4">
 				<div className="flex flex-row items-center gap-2 md:justify-start md:w-auto justify-between w-full">
 					<h1 className="text-base font-semibold">Typst Online Editor</h1>
@@ -125,6 +152,15 @@ export default function TypstEditorHeader({
 						{t('header.downloadPdf')}
 					</button>
 				)}
+				<button
+					onClick={onToggleAi}
+					className={`p-1.5 rounded transition-colors ${
+						aiOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
+					}`}
+					title={t('header.aiAssistant')}
+				>
+					<Sparkles className="w-4 h-4" />
+				</button>
 				<button
 					onClick={onOpenSettings}
 					className="p-1.5 text-white rounded hover:bg-gray-600 transition-colors"

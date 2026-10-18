@@ -1,28 +1,38 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Info, Sliders, Type, X } from 'lucide-preact'
+import { Info, Sliders, Sparkles, Type, X } from 'lucide-preact'
 import type { ComponentType } from 'preact'
 import { version } from '../../../package.json'
 import { LANGS, LANG_LABELS, type LangSetting } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
 import type { MessageKey } from '@/lib/i18n/messages'
+import type { AiSettings } from '@/lib/ai/aiSettings'
+import AiSettingsPanel from './settings/AiSettingsPanel'
 import FontsSettingsPanel from './settings/FontsSettingsPanel'
 
 /** One page of the dialog. */
-export type SettingsTab = 'general' | 'fonts' | 'about'
+export type SettingsTab = 'general' | 'fonts' | 'ai' | 'about'
 
 interface SettingsDialogProps {
-	/** Page to open on; the language page is the default. */
+	/** Page to open on; the language/fonts pages are the default. */
 	initialTab?: SettingsTab
 	onClose: () => void
+	aiSettings: AiSettings
+	onAiSettingsChange: (changes: Partial<AiSettings>) => void
 }
 
 const TABS: { id: SettingsTab; label: MessageKey; icon: ComponentType<{ className?: string }> }[] = [
 	{ id: 'general', label: 'settings.tabGeneral', icon: Sliders },
 	{ id: 'fonts', label: 'settings.tabFonts', icon: Type },
+	{ id: 'ai', label: 'settings.tabAi', icon: Sparkles },
 	{ id: 'about', label: 'settings.tabAbout', icon: Info },
 ]
 
-export default function SettingsDialog({ initialTab = 'general', onClose }: SettingsDialogProps) {
+export default function SettingsDialog({
+	initialTab = 'general',
+	onClose,
+	aiSettings,
+	onAiSettingsChange,
+}: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
 	const [tab, setTab] = useState<SettingsTab>(initialTab)
 
@@ -95,6 +105,10 @@ export default function SettingsDialog({ initialTab = 'general', onClose }: Sett
 						)}
 
 						{tab === 'fonts' && <FontsSettingsPanel />}
+
+						{tab === 'ai' && (
+							<AiSettingsPanel settings={aiSettings} onChange={onAiSettingsChange} />
+						)}
 
 						{tab === 'about' && (
 							<div>
