@@ -22,7 +22,12 @@ const HANDLE_WIDTH = 6
 const SIDEBAR_MIN_WIDTH = 200
 const SIDEBAR_MAX_WIDTH = 600
 const SIDEBAR_COLLAPSED_WIDTH = 48
-const SIDEBAR_MOBILE_WIDTH = 320
+
+/**
+ * Mobile shows the editor alone: each of these covers it, one at a time, and
+ * the header above stays reachable to open and close them.
+ */
+type MobilePanel = 'files' | 'preview' | 'ai'
 
 const EDITOR_MIN_WIDTH = 300
 const PREVIEW_MIN_WIDTH = 440 // Minimum width for PDF preview (toolbar requires 400px)
@@ -62,6 +67,12 @@ export default function TypstEditor() {
 	 * panel only takes that slot over when it is asked to (header button).
 	 */
 	const [isAiOpen, setIsAiOpen] = useState(storedLayout.aiOpen ?? false)
+	/**
+	 * Which panel covers the editor on mobile. Transient on purpose: what
+	 * `LayoutStorage` remembers is the desktop arrangement, not the page a phone
+	 * happened to be reading.
+	 */
+	const [mobilePanel, setMobilePanel] = useState<MobilePanel | null>(null)
 	/**
 	 * The default widths are fractions of the window, so the derived columns
 	 * have to know it; `clientWidth` excludes the scrollbar.
@@ -114,6 +125,11 @@ export default function TypstEditor() {
 		setIsAiOpen(open)
 	}, [])
 
+	/** Open `panel` over the editor, or close it if it is the one showing. */
+	const toggleMobilePanel = (panel: MobilePanel) =>
+		setMobilePanel((current) => (current === panel ? null : panel))
+	const closeMobilePanel = useCallback(() => setMobilePanel(null), [])
+
 	// Compiler management
 	const {
 		status,
@@ -157,6 +173,11 @@ export default function TypstEditor() {
 	const openAi = useCallback(() => setAiOpen(true), [setAiOpen])
 	/** The preview's own toggle; the AI panel keeps its slot either way. */
 	const togglePreview = () => setPreviewCollapsed(!isPreviewCollapsed)
+	/**
+	 * On mobile the panel is one of the overlays over the editor; on the desktop
+	 * it is the column that shares the right half with the preview.
+	 */
+	const aiPanelOpen = isMobile ? mobilePanel === 'ai' : isAiOpen
 
 	// The AI panel reads the project lazily — it must see the buffer as of the
 	// moment a request is sent, not as of the last render — so it gets refs.
@@ -227,9 +248,7 @@ export default function TypstEditor() {
 		),
 	})
 
-	const effectiveSidebarWidth = isSidebarCollapsed
-		? SIDEBAR_COLLAPSED_WIDTH
-		: (isMobile ? SIDEBAR_MOBILE_WIDTH : sidebarResize.value)
+	const effectiveSidebarWidth = isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarResize.value
 
 	/**
 	 * The width the editor and the column right of it share: everything right
@@ -334,16 +353,21 @@ export default function TypstEditor() {
 				hasCompiled={hasCompiled}
 				pdfUrl={pdfUrl}
 				isMobile={isMobile}
-				aiOpen={isAiOpen}
+				aiOpen={aiPanelOpen}
+				filesOpen={mobilePanel === 'files'}
+				previewOpen={mobilePanel === 'preview'}
 				onCompileNow={handleCompileNow}
 				onDownload={handleDownload}
 				onOpenSettings={() => setSettingsTab('general')}
-				onToggleAi={() => (isAiOpen ? closeAi() : openAi())}
+				onToggleAi={() => (isMobile ? toggleMobilePanel('ai') : isAiOpen ? closeAi() : openAi())}
+				onToggleFiles={() => toggleMobilePanel('files')}
+				onTogglePreview={() => toggleMobilePanel('preview')}
 			/>
 
 			{settingsTab && (
 				<SettingsDialog
 					initialTab={settingsTab}
+					isMobile={isMobile}
 					onClose={() => setSettingsTab(null)}
 					aiSettings={aiSettings}
 					onAiSettingsChange={updateAiSettings}
@@ -352,8 +376,8 @@ export default function TypstEditor() {
 
 			{/* Mounted while closed too, so the conversation survives a close. */}
 			<AiAssistantPanel
-				isOpen={isAiOpen && settingsTab === null}
-				onClose={closeAi}
+				isOpen={aiPanelOpen && settingsTab === null}
+				onClose={isMobile ? closeMobilePanel : closeAi}
 				activeFilePath={activeFilePath}
 				settings={aiSettings}
 				selectionStore={selectionStore}
@@ -364,66 +388,59 @@ export default function TypstEditor() {
 				onOpenSettings={() => setSettingsTab('ai')}
 			/>
 
+			{/* Mobile: the file tree and the preview are pages over the editor, not
+			    columns beside it. They leave the header in place, so its buttons —
+			    and the close buttons inside the panels — keep working. */}
+			{isMobile && mobilePanel === 'files' && (
+				<div className="fixed inset-x-0 bottom-0 top-[var(--app-header-height,0px)] z-40 bg-gray-800">
+					<FileExplorer
+						project={currentProject}
+						activeFile={activeFilePath}
+						onFileSelect={(path) => {
+							handleFileSelect(path)
+							closeMobilePanel()
+						}}
+						onFileCreate={handleFileCreate}
+						onFolderCreate={handleFolderCreate}
+						onFileDelete={handleFileDelete}
+						onFileRename={handleFileRename}
+						onFileMove={handleFileMove}
+						onRenameProject={renameProject}
+						onImportProject={handleProjectImport}
+						onExportProject={handleProjectExport}
+						isCollapsed={false}
+						onToggleCollapse={closeMobilePanel}
+					/>
+				</div>
+			)}
+
+			{isMobile && mobilePanel === 'preview' && (
+				<div className="fixed inset-x-0 bottom-0 top-[var(--app-header-height,0px)] z-40 bg-gray-800">
+					<PdfPreview
+						pdfUrl={pdfUrl}
+						status={status}
+						errorMsg={errorMsg}
+						hasCompiled={hasCompiled}
+						fileCount={currentProject.files.length}
+						charCount={getActiveFile()?.content.length || 0}
+						isCollapsed={false}
+						onToggleCollapse={closeMobilePanel}
+					/>
+				</div>
+			)}
+
 			{isMobile ? (
-				/* Mobile Layout: Sidebar + Editor on top, Preview below */
-				<div className="flex flex-col flex-1 overflow-hidden">
-					{/* Top section: Sidebar + Editor */}
-					<div className="flex flex-1 min-h-0 overflow-hidden">
-						{/* File Explorer Sidebar */}
-						<div 
-							style={{ 
-								width: `${effectiveSidebarWidth}px`,
-								minWidth: `${effectiveSidebarWidth}px`,
-								maxWidth: `${effectiveSidebarWidth}px`,
-								transition: isSidebarCollapsed ? 'width 0.2s ease-in-out' : 'none'
-							}}
-							className="shrink-0"
-						>
-							<FileExplorer
-								project={currentProject}
-								activeFile={activeFilePath}
-								onFileSelect={handleFileSelect}
-								onFileCreate={handleFileCreate}
-								onFolderCreate={handleFolderCreate}
-								onFileDelete={handleFileDelete}
-								onFileRename={handleFileRename}
-								onFileMove={handleFileMove}
-								onRenameProject={renameProject}
-								onImportProject={handleProjectImport}
-								onExportProject={handleProjectExport}
-								isCollapsed={isSidebarCollapsed}
-								onToggleCollapse={() => setSidebarCollapsed(!isSidebarCollapsed)}
-							/>
-						</div>
-
-						{/* Code Editor */}
-						<div className="flex-1 min-w-0">
-							<CodeEditor
-								project={currentProject}
-								activeFilePath={activeFilePath}
-								onChange={updateActiveFileContent}
-								onFileSelect={handleFileSelect}
-								onSelectionChange={selectionStore.set}
-							/>
-						</div>
-					</div>
-
-					{/* Bottom section: PDF Preview */}
-					<div 
-						className="flex-1 min-h-0"
-						style={{ minHeight: '300px' }}
-					>
-						<PdfPreview
-							pdfUrl={pdfUrl}
-							status={status}
-							errorMsg={errorMsg}
-							hasCompiled={hasCompiled}
-							fileCount={currentProject.files.length}
-							charCount={getActiveFile()?.content.length || 0}
-							isCollapsed={isPreviewCollapsed}
-							onToggleCollapse={togglePreview}
-						/>
-					</div>
+				/* Mobile Layout: the editor alone; the panels open over it. Not a
+				   flex row — a flex item would size to the code's own width and
+				   push the line out of reach instead of scrolling in the editor. */
+				<div className="flex-1 min-w-0 overflow-hidden">
+					<CodeEditor
+						project={currentProject}
+						activeFilePath={activeFilePath}
+						onChange={updateActiveFileContent}
+						onFileSelect={handleFileSelect}
+						onSelectionChange={selectionStore.set}
+					/>
 				</div>
 			) : (
 				/* Desktop Layout: Sidebar | Editor + Preview | AI panel */

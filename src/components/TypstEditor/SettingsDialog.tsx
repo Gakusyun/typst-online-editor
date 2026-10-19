@@ -16,6 +16,12 @@ export type SettingsTab = 'general' | 'fonts' | 'ai' | 'about'
 interface SettingsDialogProps {
 	/** Page to open on; the language/fonts pages are the default. */
 	initialTab?: SettingsTab
+	/**
+	 * Mobile: the settings are a page of their own, not a card on a dimmed
+	 * backdrop — there is no room for a card, and a tap outside should not
+	 * throw away the page the user is reading.
+	 */
+	isMobile?: boolean
 	onClose: () => void
 	aiSettings: AiSettings
 	onAiSettingsChange: (changes: Partial<AiSettings>) => void
@@ -30,6 +36,7 @@ const TABS: { id: SettingsTab; label: MessageKey; icon: ComponentType<{ classNam
 
 export default function SettingsDialog({
 	initialTab = 'general',
+	isMobile = false,
 	onClose,
 	aiSettings,
 	onAiSettingsChange,
@@ -48,11 +55,19 @@ export default function SettingsDialog({
 
 	return (
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-			onClick={onClose}
+			className={
+				isMobile
+					? 'fixed inset-0 z-50 flex'
+					: 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4'
+			}
+			onClick={isMobile ? undefined : onClose}
 		>
 			<div
-				className="flex h-[min(85vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-gray-800 border border-gray-700 shadow-xl"
+				className={
+					isMobile
+						? 'flex h-full w-full flex-col overflow-hidden bg-gray-800'
+						: 'flex h-[min(85vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-gray-800 border border-gray-700 shadow-xl'
+				}
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">

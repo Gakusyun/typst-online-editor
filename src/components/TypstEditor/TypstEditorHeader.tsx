@@ -1,7 +1,7 @@
 
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
-import { Settings, Loader2, CheckCircle2, XCircle, Check, Zap, Sparkles } from 'lucide-preact'
+import { Settings, Loader2, CheckCircle2, XCircle, Check, Zap, Sparkles, FolderTree, Eye } from 'lucide-preact'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { useI18n } from '@/lib/i18n/useI18n'
 
@@ -21,10 +21,15 @@ interface TypstEditorHeaderProps {
 	pdfUrl: string | null
 	isMobile: boolean
 	aiOpen: boolean
+	/** Mobile only: whether the file tree / the preview covers the editor. */
+	filesOpen: boolean
+	previewOpen: boolean
 	onCompileNow: () => void
 	onDownload: () => void
 	onOpenSettings: () => void
 	onToggleAi: () => void
+	onToggleFiles: () => void
+	onTogglePreview: () => void
 }
 
 export default function TypstEditorHeader({
@@ -33,10 +38,14 @@ export default function TypstEditorHeader({
 	pdfUrl,
 	isMobile,
 	aiOpen,
+	filesOpen,
+	previewOpen,
 	onCompileNow,
 	onDownload,
 	onOpenSettings,
 	onToggleAi,
+	onToggleFiles,
+	onTogglePreview,
 }: TypstEditorHeaderProps) {
 	const { t } = useI18n()
 	const rootRef = useRef<HTMLDivElement | null>(null)
@@ -151,6 +160,28 @@ export default function TypstEditorHeader({
 					>
 						{t('header.downloadPdf')}
 					</button>
+				)}
+				{isMobile && (
+					<>
+						<button
+							onClick={onToggleFiles}
+							className={`p-1.5 rounded transition-colors ${
+								filesOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
+							}`}
+							title={filesOpen ? t('files.hide') : t('files.show')}
+						>
+							<FolderTree className="w-4 h-4" />
+						</button>
+						<button
+							onClick={onTogglePreview}
+							className={`p-1.5 rounded transition-colors ${
+								previewOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
+							}`}
+							title={previewOpen ? t('preview.close') : t('preview.show')}
+						>
+							<Eye className="w-4 h-4" />
+						</button>
+					</>
 				)}
 				<button
 					onClick={onToggleAi}
