@@ -174,8 +174,8 @@ export default function TypstEditor() {
 	/** The preview's own toggle; the AI panel keeps its slot either way. */
 	const togglePreview = () => setPreviewCollapsed(!isPreviewCollapsed)
 	/**
-	 * On mobile the panel is one of the overlays over the editor; on the desktop
-	 * it is the column that shares the right half with the preview.
+	 * On mobile the panel is one of the pages over the editor; on the desktop it
+	 * is the column that shares the right half with the preview.
 	 */
 	const aiPanelOpen = isMobile ? mobilePanel === 'ai' : isAiOpen
 
@@ -383,16 +383,17 @@ export default function TypstEditor() {
 				selectionStore={selectionStore}
 				docked={aiDocked}
 				dockedWidth={sideSlotWidth}
+				fullPage={isMobile}
 				getTarget={getAiTarget}
 				onApply={applyAiEdit}
 				onOpenSettings={() => setSettingsTab('ai')}
 			/>
 
-			{/* Mobile: the file tree and the preview are pages over the editor, not
-			    columns beside it. They leave the header in place, so its buttons —
-			    and the close buttons inside the panels — keep working. */}
+			{/* Mobile: the file tree and the preview are pages of their own over the
+			    editor — header included, so they read as pages rather than as layers
+			    on top of one. Each carries its own title bar and close button. */}
 			{isMobile && mobilePanel === 'files' && (
-				<div className="fixed inset-x-0 bottom-0 top-[var(--app-header-height,0px)] z-40 bg-gray-800">
+				<div className="fixed inset-0 z-40 bg-gray-800">
 					<FileExplorer
 						project={currentProject}
 						activeFile={activeFilePath}
@@ -415,7 +416,7 @@ export default function TypstEditor() {
 			)}
 
 			{isMobile && mobilePanel === 'preview' && (
-				<div className="fixed inset-x-0 bottom-0 top-[var(--app-header-height,0px)] z-40 bg-gray-800">
+				<div className="fixed inset-0 z-40 bg-gray-800">
 					<PdfPreview
 						pdfUrl={pdfUrl}
 						status={status}

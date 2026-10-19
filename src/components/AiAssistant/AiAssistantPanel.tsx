@@ -50,6 +50,12 @@ interface AiAssistantPanelProps {
 	 * Ignored while the panel overlays the workspace instead.
 	 */
 	dockedWidth: number
+	/**
+	 * Mobile: the panel is a page of its own over the whole screen, header
+	 * included — the header's own buttons are hidden then, so the panel's title
+	 * bar is what closes it. Desktop drawers leave the header visible.
+	 */
+	fullPage?: boolean
 	/** Snapshot of what the model may rewrite, taken when a request is sent. */
 	getTarget: (scope: AiEditScope) => AiEditTarget
 	/** Put a reply back into the document, or just edit the buffer. */
@@ -100,6 +106,7 @@ export default function AiAssistantPanel({
 	selectionStore,
 	docked,
 	dockedWidth,
+	fullPage = false,
 	getTarget,
 	onApply,
 	onOpenSettings,
@@ -161,8 +168,10 @@ export default function AiAssistantPanel({
 
 	return (
 		<aside
-			className={`${isOpen ? 'flex' : 'hidden'} fixed bottom-0 right-0 top-[var(--app-header-height,0px)] z-40 flex-col border-l border-gray-700 bg-gray-800 shadow-2xl`}
-			style={{ width: docked ? `${dockedWidth}px` : '100%' }}
+			className={`${isOpen ? 'flex' : 'hidden'} fixed z-40 flex-col border-l border-gray-700 bg-gray-800 shadow-2xl ${
+				fullPage ? 'inset-0' : 'bottom-0 right-0 top-[var(--app-header-height,0px)]'
+			}`}
+			style={fullPage ? undefined : { width: docked ? `${dockedWidth}px` : '100%' }}
 		>
 			<div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-700">
 				<h2 className="flex items-center gap-2 text-sm font-semibold">
