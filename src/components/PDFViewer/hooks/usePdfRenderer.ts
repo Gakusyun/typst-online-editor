@@ -31,7 +31,8 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
-	const observerSetupRef = useRef(false)
+	/** The element the resize observer currently watches; null until it exists. */
+	const observerTargetRef = useRef<HTMLElement | null>(null)
 	const intersectionObserverRef = useRef<IntersectionObserver | null>(null)
 	const programmaticScrollRef = useRef(false)
 	const lastPageChangeRef = useRef(currentPage)
@@ -92,22 +93,21 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 		// Capture the current canvas refs for cleanup
 		const canvasRefsSnapshot = canvasRefs.current
 
-		// Set up ResizeObserver once when we know the container exists
-		if (!observerSetupRef.current) {
-			const parentElement = containerRef.current.parentElement
-			if (parentElement) {
-				setContainerWidth(parentElement.clientWidth)
-				
-				resizeObserverRef.current = new ResizeObserver((entries) => {
-					for (const entry of entries) {
-						const width = entry.contentRect.width
-						setContainerWidth(width)
-					}
-				})
-				
-				resizeObserverRef.current.observe(parentElement)
-				observerSetupRef.current = true
-			}
+		// Track the scroll container's width — the page scale is derived from it
+		// — and re-target when the container is replaced: a collapsed preview
+		// unmounts it, and the next one is a different element that must not
+		// inherit the width of the one before.
+		const parentElement = containerRef.current.parentElement
+		if (parentElement && observerTargetRef.current !== parentElement) {
+			resizeObserverRef.current?.disconnect()
+			resizeObserverRef.current = new ResizeObserver((entries) => {
+				for (const entry of entries) {
+					setContainerWidth(entry.contentRect.width)
+				}
+			})
+			resizeObserverRef.current.observe(parentElement)
+			observerTargetRef.current = parentElement
+			setContainerWidth(parentElement.clientWidth)
 		}
 
 		let mounted = true

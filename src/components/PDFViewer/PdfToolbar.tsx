@@ -44,11 +44,11 @@ export default function PdfToolbar({
 	}
 	
 	return (
-		<div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+		<div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-1">
 			<span className="text-sm text-gray-400 whitespace-nowrap">{t('preview.title')}</span>
 			
 			{pdfUrl && (
-				<div className="flex items-center gap-3">
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 					{/* Page Navigation */}
 					<div className="flex items-center gap-1">
 						<button
