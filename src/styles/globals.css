@@ -8,6 +8,12 @@
  * `src/components/CodeEditor/theme.ts`).
  */
 :root {
+	/**
+	 * The colour behind everything (`bg-gray-900` on the app root): the canvas
+	 * mobile browsers leave unpainted above and below the safe areas, and the
+	 * overscroll band, must be this instead of the default white.
+	 */
+	--app-bg: var(--color-gray-900);
 	--app-ui-font-fallback: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
 		'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 	--app-editor-font-fallback: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
@@ -30,6 +36,19 @@
 @layer base {
 	html {
 		font-family: var(--app-ui-font, var(--app-ui-font-fallback));
+	}
+
+	/**
+	 * The app paints its own surfaces, so the canvas behind them has to be the
+	 * same dark: `100vh` stops at the safe areas on a phone, and the bands it
+	 * leaves (plus the overscroll one) would otherwise show the white default.
+	 * `color-scheme` tells the browser its own bits — scrollbars, form
+	 * controls, the canvas — that this page is dark.
+	 */
+	html,
+	body {
+		background-color: var(--app-bg);
+		color-scheme: dark;
 	}
 }
 
