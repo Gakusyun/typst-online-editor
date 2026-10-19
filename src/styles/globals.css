@@ -13,11 +13,13 @@
 	--app-editor-font-fallback: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
 		'Courier New', monospace;
 	/**
-	 * Width of the AI assistant panel (`AiAssistantPanel`) — and, while it is
-	 * docked, the room the workspace reserves for it (`TypstEditor`). One
-	 * property so the two can never disagree.
+	 * Scrollbars (all of them — the file tree, the editor, the preview, the
+	 * settings dialog). A neutral gray rather than a white veil: the preview
+	 * scrolls white PDF pages, where a translucent white thumb would vanish.
 	 */
-	--ai-panel-width: 420px;
+	--app-scrollbar-thumb: rgb(156 163 175 / 0.45);
+	--app-scrollbar-thumb-hover: rgb(156 163 175 / 0.75);
+	--app-scrollbar-track: transparent;
 }
 
 @theme {
@@ -29,4 +31,42 @@
 	html {
 		font-family: var(--app-ui-font, var(--app-ui-font-fallback));
 	}
+}
+
+/**
+ * Scrollbars — one look for every scroll container in the app (CodeMirror's
+ * `.cm-scroller`, the file tree, the settings dialog, the preview, …).
+ * `scrollbar-width`/`scrollbar-color` cover Firefox and the standard path;
+ * the `::-webkit-scrollbar` rules cover Chromium and WebKit (which ignore the
+ * standard properties).
+ */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: var(--app-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: var(--app-scrollbar-thumb);
+	/* The transparent border + `content-box` inset the thumb, so the corners
+	   of the 10px box never show as a square slab behind the rounded thumb. */
+	border: 2px solid transparent;
+	background-clip: content-box;
+	border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--app-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+	background: var(--app-scrollbar-track);
 }
