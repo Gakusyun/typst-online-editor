@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { EditorState, type Extension } from '@codemirror/state'
+import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import {
 	EditorView,
 	crosshairCursor,
@@ -37,6 +37,7 @@ import { json } from '@codemirror/lang-json'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { useI18n } from '@/lib/i18n/useI18n'
+import { useAppearance } from '@/lib/appearance/useAppearance'
 import { TinymistLspClient, type TinymistLspStatus } from '@/lib/lsp/tinymistClient'
 import { ProjectWorkspace, pathToUri } from '@/lib/lsp/projectWorkspace'
 import type { Project } from '@/lib/storage/ProjectStorage'
@@ -61,8 +62,16 @@ interface CodeEditorProps {
 const IMAGE_FILES = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
 const FONT_FILES = ['ttf', 'otf', 'woff', 'woff2']
 
-function baseExtensions(placeholderText: string): Extension[] {
+/**
+ * Word wrap is toggled while the view lives (Settings stays open over it), so
+ * it sits in a compartment that a reconfigure effect can swap in place instead
+ * of rebuilding the whole editor.
+ */
+const wordWrapCompartment = new Compartment()
+
+function baseExtensions(placeholderText: string, wordWrap: boolean): Extension[] {
 	return [
+		wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
 		foldGutter(),
 		lineNumbers(),
 		highlightActiveLineGutter(),
@@ -132,6 +141,7 @@ export default function CodeEditor({
 	onSelectionChange,
 }: CodeEditorProps) {
 	const { t } = useI18n()
+	const { editorWordWrap } = useAppearance()
 	const hostRef = useRef<HTMLDivElement | null>(null)
 	const viewRef = useRef<EditorView | null>(null)
 	const lspRef = useRef<TinymistLspClient | null>(null)
@@ -206,7 +216,7 @@ export default function CodeEditor({
 		if (isBinaryFile || !hostRef.current) return
 		const client = lspClientRef.current
 		const extensions: Extension[] = [
-			...baseExtensions(t('editor.typeHere')),
+			...baseExtensions(t('editor.typeHere'), editorWordWrap),
 			...languageExtensions(activeFilePath),
 			editorTheme,
 			editorHighlighting,
@@ -237,6 +247,14 @@ export default function CodeEditor({
 		// external edits are applied by the sync effect below.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeFilePath, isBinaryFile, isTypstFile])
+
+	// Word wrap toggles from Settings while the view lives; reconfigure the
+	// compartment instead of rebuilding the editor (which would reset scroll).
+	useEffect(() => {
+		viewRef.current?.dispatch({
+			effects: wordWrapCompartment.reconfigure(editorWordWrap ? EditorView.lineWrapping : []),
+		})
+	}, [editorWordWrap])
 
 	// Apply externally-driven content changes (AI edits, import, undo, …).
 	useEffect(() => {

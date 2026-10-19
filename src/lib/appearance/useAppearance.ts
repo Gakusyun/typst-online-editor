@@ -4,8 +4,9 @@ import type { FontChoice } from './appearance'
 import type { SystemFontRegistrationError } from './localFonts'
 
 /**
- * The font choices made in Settings. See `./appearance` for the persistence and
- * CSS plumbing and `./AppearanceProvider` for the implementation.
+ * The appearance choices made in Settings (fonts, editor word wrap). See
+ * `./appearance` for the persistence and CSS plumbing and
+ * `./AppearanceProvider` for the implementation.
  */
 export interface Appearance {
 	/** Interface (app chrome) font family; `null` = the built-in default stack. */
@@ -13,6 +14,9 @@ export interface Appearance {
 
 	/** Editor font family — code, completion popups and compile errors. */
 	readonly editorFont: FontChoice
+
+	/** Whether the editor wraps long lines (Settings → General). */
+	readonly editorWordWrap: boolean
 
 	/** Why the interface font could not be published to CSS, if it could not. */
 	readonly uiFontError: SystemFontRegistrationError | null
@@ -25,6 +29,9 @@ export interface Appearance {
 
 	/** Choose the editor font; persisted and applied immediately. */
 	setEditorFont(font: FontChoice): void
+
+	/** Enable/disable editor word wrap; persisted and applied immediately. */
+	setEditorWordWrap(enabled: boolean): void
 }
 
 /** Deliberately `null` outside `AppearanceProvider`: a missing provider throws. */

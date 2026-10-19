@@ -7,7 +7,9 @@ import {
 	UI_FONT_KEY,
 	UI_FONT_VAR,
 	applyFontVar,
+	readEditorWordWrap,
 	readFontChoice,
+	writeEditorWordWrap,
 	writeFontChoice,
 	type FontChoice,
 } from './appearance'
@@ -18,16 +20,19 @@ interface AppearanceProviderProps {
 }
 
 /**
- * Owns the font choices (Settings → Fonts) and publishes them as CSS custom
- * properties on `<html>`: `--app-ui-font` and `--app-editor-font`. `globals.css`
- * and the CodeMirror theme consume the properties with the default stacks as
- * fallback, so clearing a choice restores the defaults without any CSS change.
+ * Owns the Settings → Fonts / Settings → General editor choices and publishes
+ * the font families as CSS custom properties on `<html>`: `--app-ui-font` and
+ * `--app-editor-font`. `globals.css` and the CodeMirror theme consume the
+ * properties with the default stacks as fallback, so clearing a choice restores
+ * the defaults without any CSS change. The word wrap flag is consumed directly
+ * by `CodeEditor` (CodeMirror `lineWrapping`).
  *
  * The provider renders no markup: children pick the fonts up from CSS.
  */
 export default function AppearanceProvider({ children }: AppearanceProviderProps) {
 	const [uiFont, setUiFontState] = useState<FontChoice>(() => readFontChoice(UI_FONT_KEY))
 	const [editorFont, setEditorFontState] = useState<FontChoice>(() => readFontChoice(EDITOR_FONT_KEY))
+	const [editorWordWrap, setEditorWordWrapState] = useState<boolean>(() => readEditorWordWrap())
 	/** Why a chosen family could not be published to CSS, per role. */
 	const [fontErrors, setFontErrors] = useState<{
 		ui: SystemFontRegistrationError | null
@@ -44,6 +49,11 @@ export default function AppearanceProvider({ children }: AppearanceProviderProps
 	const setEditorFont = useCallback((font: FontChoice) => {
 		writeFontChoice(EDITOR_FONT_KEY, font)
 		setEditorFontState(font)
+	}, [])
+
+	const setEditorWordWrap = useCallback((enabled: boolean) => {
+		writeEditorWordWrap(enabled)
+		setEditorWordWrapState(enabled)
 	}, [])
 
 	useEffect(() => {
@@ -78,12 +88,14 @@ export default function AppearanceProvider({ children }: AppearanceProviderProps
 		() => ({
 			uiFont,
 			editorFont,
+			editorWordWrap,
 			uiFontError: fontErrors.ui,
 			editorFontError: fontErrors.editor,
 			setUiFont,
 			setEditorFont,
+			setEditorWordWrap,
 		}),
-		[uiFont, editorFont, fontErrors, setUiFont, setEditorFont]
+		[uiFont, editorFont, editorWordWrap, fontErrors, setUiFont, setEditorFont, setEditorWordWrap]
 	)
 
 	return <AppearanceContext.Provider value={appearance}>{children}</AppearanceContext.Provider>

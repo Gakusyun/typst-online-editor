@@ -1,10 +1,11 @@
 /**
- * Font choices for the app chrome (Settings → Fonts).
+ * Editor/appearance choices (Settings → Fonts and Settings → General).
  *
- * A choice is a CSS font family *name* that must resolve on the user's machine.
- * It never touches the Typst compiler — the compiled PDF uses the CDN/uploaded
- * fonts in `@/lib/typst/fonts` — it only styles the interface and the code
- * editor (diagnostics included).
+ * A font choice is a CSS font family *name* that must resolve on the user's
+ * machine. It never touches the Typst compiler — the compiled PDF uses the
+ * CDN/uploaded fonts in `@/lib/typst/fonts` — it only styles the interface and
+ * the code editor (diagnostics included). The word wrap flag likewise only
+ * affects the code editor's display.
  *
  * The state itself lives in `./AppearanceProvider`; this module holds the pure
  * parts: persistence, normalization, and the CSS custom properties the choice
@@ -16,6 +17,9 @@ export const UI_FONT_KEY = 'typst-ui-font'
 
 /** `localStorage` key holding the editor font family. */
 export const EDITOR_FONT_KEY = 'typst-editor-font'
+
+/** `localStorage` key holding whether the editor wraps long lines. */
+export const EDITOR_WORD_WRAP_KEY = 'typst-editor-word-wrap'
 
 /** Custom property the interface font family is published as (see `globals.css`). */
 export const UI_FONT_VAR = '--app-ui-font'
@@ -51,6 +55,19 @@ export function readFontChoice(key: string): FontChoice {
 export function writeFontChoice(key: string, choice: FontChoice): void {
 	if (choice === null) localStorage.removeItem(key)
 	else localStorage.setItem(key, choice)
+}
+
+/**
+ * Editor word wrap. Absent key = off, which is also CodeMirror's default
+ * (long lines scroll horizontally).
+ */
+export function readEditorWordWrap(): boolean {
+	return localStorage.getItem(EDITOR_WORD_WRAP_KEY) === 'true'
+}
+
+export function writeEditorWordWrap(enabled: boolean): void {
+	if (enabled) localStorage.setItem(EDITOR_WORD_WRAP_KEY, 'true')
+	else localStorage.removeItem(EDITOR_WORD_WRAP_KEY)
 }
 
 /** Publish `choice` as custom property `name` on `<html>`; `null` clears it. */

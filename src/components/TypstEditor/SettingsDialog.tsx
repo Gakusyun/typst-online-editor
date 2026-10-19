@@ -6,6 +6,7 @@ import { LANGS, LANG_LABELS, type LangSetting } from '@/lib/i18n/i18n'
 import { useI18n } from '@/lib/i18n/useI18n'
 import type { MessageKey } from '@/lib/i18n/messages'
 import type { AiSettings } from '@/lib/ai/aiSettings'
+import { useAppearance } from '@/lib/appearance/useAppearance'
 import AiSettingsPanel from './settings/AiSettingsPanel'
 import FontsSettingsPanel from './settings/FontsSettingsPanel'
 
@@ -34,6 +35,7 @@ export default function SettingsDialog({
 	onAiSettingsChange,
 }: SettingsDialogProps) {
 	const { t, langSetting, setLangSetting } = useI18n()
+	const { editorWordWrap, setEditorWordWrap } = useAppearance()
 	const [tab, setTab] = useState<SettingsTab>(initialTab)
 
 	useEffect(() => {
@@ -101,6 +103,19 @@ export default function SettingsDialog({
 										</option>
 									))}
 								</select>
+
+								<label className="mt-4 flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+									<input
+										type="checkbox"
+										checked={editorWordWrap}
+										onChange={(e) => setEditorWordWrap(e.currentTarget.checked)}
+										className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500"
+									/>
+									<span>
+										{t('settings.wordWrap')}
+										<span className="block text-xs text-gray-500">{t('settings.wordWrapHint')}</span>
+									</span>
+								</label>
 							</div>
 						)}
 
