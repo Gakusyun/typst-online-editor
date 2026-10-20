@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { AppearanceContext, type Appearance } from './useAppearance'
 import {
 	EDITOR_FONT_KEY,
@@ -38,6 +38,9 @@ export default function AppearanceProvider({ children }: AppearanceProviderProps
 		ui: SystemFontRegistrationError | null
 		editor: SystemFontRegistrationError | null
 	}>({ ui: null, editor: null })
+	/** The chosen families, readable from an async registration that outlived its render. */
+	const familiesRef = useRef<{ ui: FontChoice; editor: FontChoice }>({ ui: uiFont, editor: editorFont })
+	familiesRef.current = { ui: uiFont, editor: editorFont }
 
 	// Persisted on change, never on mount: a second tab that mounted before the
 	// choice was made must not write its stale (empty) state back.
@@ -70,15 +73,29 @@ export default function AppearanceProvider({ children }: AppearanceProviderProps
 	// already see). Replaced faces are dropped: a font file can be tens of MB.
 	useEffect(() => {
 		let cancelled = false
+		/**
+		 * The families in force right now, read from a ref: a registration that
+		 * loses the race with the effect that replaced it may still add its
+		 * `FontFace` (tens of MB) *after* that effect pruned, so it prunes again
+		 * against what is current rather than the list it started with.
+		 */
+		const current = () =>
+			[familiesRef.current.ui, familiesRef.current.editor].filter(
+				(family): family is string => family !== null
+			)
 		const register = async (family: FontChoice, role: 'ui' | 'editor') => {
 			setFontErrors((previous) => ({ ...previous, [role]: null }))
 			if (!family) return
 			const error = await registerSystemFont(family)
-			if (!cancelled) setFontErrors((previous) => ({ ...previous, [role]: error }))
+			if (cancelled) {
+				pruneSystemFontFaces(current())
+				return
+			}
+			setFontErrors((previous) => ({ ...previous, [role]: error }))
 		}
 		void register(uiFont, 'ui')
 		void register(editorFont, 'editor')
-		pruneSystemFontFaces([uiFont, editorFont].filter((family): family is string => family !== null))
+		pruneSystemFontFaces(current())
 		return () => {
 			cancelled = true
 		}

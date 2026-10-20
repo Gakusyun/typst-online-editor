@@ -12,6 +12,8 @@
  * is published as.
  */
 
+import { safeGet, safeRemove, safeSet } from '@/lib/storage/safeStorage'
+
 /** `localStorage` key holding the interface font family. */
 export const UI_FONT_KEY = 'typst-ui-font'
 
@@ -49,12 +51,12 @@ export function normalizeFontChoice(value: string): FontChoice {
 }
 
 export function readFontChoice(key: string): FontChoice {
-	return normalizeFontChoice(localStorage.getItem(key) ?? '')
+	return normalizeFontChoice(safeGet(key) ?? '')
 }
 
 export function writeFontChoice(key: string, choice: FontChoice): void {
-	if (choice === null) localStorage.removeItem(key)
-	else localStorage.setItem(key, choice)
+	if (choice === null) safeRemove(key)
+	else safeSet(key, choice)
 }
 
 /**
@@ -62,12 +64,12 @@ export function writeFontChoice(key: string, choice: FontChoice): void {
  * (long lines scroll horizontally).
  */
 export function readEditorWordWrap(): boolean {
-	return localStorage.getItem(EDITOR_WORD_WRAP_KEY) === 'true'
+	return safeGet(EDITOR_WORD_WRAP_KEY) === 'true'
 }
 
 export function writeEditorWordWrap(enabled: boolean): void {
-	if (enabled) localStorage.setItem(EDITOR_WORD_WRAP_KEY, 'true')
-	else localStorage.removeItem(EDITOR_WORD_WRAP_KEY)
+	if (enabled) safeSet(EDITOR_WORD_WRAP_KEY, 'true')
+	else safeRemove(EDITOR_WORD_WRAP_KEY)
 }
 
 /** Publish `choice` as custom property `name` on `<html>`; `null` clears it. */

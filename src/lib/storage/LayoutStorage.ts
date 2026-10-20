@@ -9,6 +9,8 @@
  * they must fit in) belong to the layout that reads them (`TypstEditor`).
  */
 
+import { safeGet, safeSet } from './safeStorage'
+
 const LAYOUT_KEY = 'typst-layout'
 
 /** The persisted arrangement; a field that is absent keeps its preset value. */
@@ -44,11 +46,13 @@ function sanitize(value: unknown): LayoutPreferences {
 /** The stored arrangement; `{}` when there is none (or it is unreadable). */
 export function readLayoutPreferences(): LayoutPreferences {
 	if (typeof window === 'undefined') return {}
-	const data = localStorage.getItem(LAYOUT_KEY)
+	const data = safeGet(LAYOUT_KEY)
 	if (!data) return {}
 	try {
 		return sanitize(JSON.parse(data))
 	} catch (error) {
+		// The record stays where it is: the next write replaces it, and until
+		// then the preset is what the user sees.
 		console.error('[layout] could not read the saved layout', error)
 		return {}
 	}
@@ -57,5 +61,7 @@ export function readLayoutPreferences(): LayoutPreferences {
 /** Merge `changes` into the stored arrangement. */
 export function writeLayoutPreferences(changes: LayoutPreferences): void {
 	if (typeof window === 'undefined') return
-	localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...readLayoutPreferences(), ...changes }))
+	// `safeSet` swallows a full/blocked store; a layout that cannot be saved is
+	// not worth interrupting the drag for.
+	safeSet(LAYOUT_KEY, JSON.stringify({ ...readLayoutPreferences(), ...changes }))
 }

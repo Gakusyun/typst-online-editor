@@ -1,3 +1,5 @@
+import { safeGet, safeSet } from './safeStorage'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -17,6 +19,12 @@ export interface Project {
 	lastModified: number
 }
 
+/** What a save did: the stamped project, and whether it reached storage. */
+export interface SaveResult {
+	project: Project
+	persisted: boolean
+}
+
 // ============================================================================
 // Storage Implementation
 // ============================================================================
@@ -24,94 +32,124 @@ export interface Project {
 const STORAGE_KEY_PREFIX = 'typst-project-'
 const PROJECTS_LIST_KEY = 'typst-projects-list'
 
+/** A stored record, or `null` when it is not shaped like a project. */
+function asProject(value: unknown): Project | null {
+	if (typeof value !== 'object' || value === null) return null
+	const record = value as Record<string, unknown>
+	if (typeof record.id !== 'string' || typeof record.name !== 'string') return null
+	if (!Array.isArray(record.files)) return null
+	const files: ProjectFile[] = []
+	for (const entry of record.files) {
+		if (typeof entry !== 'object' || entry === null) return null
+		const file = entry as Record<string, unknown>
+		if (typeof file.path !== 'string' || typeof file.content !== 'string') return null
+		files.push({
+			path: file.path,
+			content: file.content,
+			lastModified: typeof file.lastModified === 'number' ? file.lastModified : 0,
+		})
+	}
+	if (typeof record.mainFile !== 'string' || !files.some((file) => file.path === record.mainFile)) {
+		return null
+	}
+	const time = (field: unknown): number => (typeof field === 'number' ? field : 0)
+	return {
+		id: record.id,
+		name: record.name,
+		files,
+		mainFile: record.mainFile,
+		createdAt: time(record.createdAt),
+		lastModified: time(record.lastModified),
+	}
+}
+
+/** The metadata of one project, as the picker list shows it. */
+function asProjectSummary(value: unknown): { id: string; name: string; lastModified: number } | null {
+	if (typeof value !== 'object' || value === null) return null
+	const record = value as Record<string, unknown>
+	if (typeof record.id !== 'string' || typeof record.name !== 'string') return null
+	return {
+		id: record.id,
+		name: record.name,
+		lastModified: typeof record.lastModified === 'number' ? record.lastModified : 0,
+	}
+}
+
 export class ProjectStorage {
 	/**
-	 * Save a project to localStorage
+	 * Save a project to localStorage.
+	 *
+	 * The caller's object is never touched: the timestamps go onto a copy, which
+	 * is what gets persisted *and* returned, so state and storage cannot drift.
+	 * `persisted` is `false` when the browser refused the write (quota, blocked
+	 * storage) — the caller decides how to tell the user.
 	 */
-	save(project: Project): void {
-		if (typeof window === 'undefined') return
-		
+	save(project: Project): SaveResult {
 		const now = Date.now()
-		
-		// Set timestamps if not already set
-		if (!project.createdAt) {
-			project.createdAt = now
+		const stamped: Project = {
+			...project,
+			createdAt: project.createdAt || now,
+			lastModified: now,
+			files: project.files.map((file) => ({
+				...file,
+				lastModified: file.lastModified || now,
+			})),
 		}
-		project.lastModified = now
-		
-		// Update file timestamps
-		project.files.forEach(file => {
-			if (!file.lastModified) {
-				file.lastModified = now
-			}
-		})
-		
-		const key = STORAGE_KEY_PREFIX + project.id
-		localStorage.setItem(key, JSON.stringify(project))
 
-		// Update projects list
-		const list = this.list()
-		const existing = list.findIndex((p) => p.id === project.id)
-		if (existing >= 0) {
-			list[existing] = { id: project.id, name: project.name, lastModified: project.lastModified }
-		} else {
-			list.push({ id: project.id, name: project.name, lastModified: project.lastModified })
-		}
-		localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(list))
+		const persisted = safeSet(STORAGE_KEY_PREFIX + stamped.id, JSON.stringify(stamped))
+		const list = this.list().filter((entry) => entry.id !== stamped.id)
+		list.push({ id: stamped.id, name: stamped.name, lastModified: stamped.lastModified })
+		safeSet(PROJECTS_LIST_KEY, JSON.stringify(list))
+
+		return { project: stamped, persisted }
 	}
 
 	/**
-	 * Load a project from localStorage
+	 * Load a project from localStorage. A record that does not match the shape
+	 * is reported as missing rather than returned half-parsed — the caller keeps
+	 * the record on disk and can fall back to another project.
 	 */
 	load(id: string): Project | null {
-		if (typeof window === 'undefined') return null
-		
-		const key = STORAGE_KEY_PREFIX + id
-		const data = localStorage.getItem(key)
+		const data = safeGet(STORAGE_KEY_PREFIX + id)
 		if (!data) return null
-
 		try {
-			return JSON.parse(data) as Project
+			const project = asProject(JSON.parse(data))
+			if (!project) console.error(`[storage] project "${id}" has an unexpected shape`)
+			return project
 		} catch (error) {
-			console.error('Failed to parse project:', error)
+			console.error('[storage] failed to parse project:', error)
 			return null
 		}
 	}
 
 	/**
-	 * List all projects (metadata only)
+	 * List all projects (metadata only). Entries whose payload is gone are
+	 * dropped here rather than offered to the user as unopenable projects.
 	 */
 	list(): Array<{ id: string; name: string; lastModified: number }> {
-		if (typeof window === 'undefined') return []
-		
-		const data = localStorage.getItem(PROJECTS_LIST_KEY)
+		const data = safeGet(PROJECTS_LIST_KEY)
 		if (!data) return []
 
+		let parsed: unknown
 		try {
-			return JSON.parse(data)
+			parsed = JSON.parse(data)
 		} catch (error) {
-			console.error('Failed to parse projects list:', error)
+			console.error('[storage] failed to parse projects list:', error)
 			return []
 		}
+		if (!Array.isArray(parsed)) return []
+
+		const entries = parsed
+			.map(asProjectSummary)
+			.filter((entry): entry is { id: string; name: string; lastModified: number } => entry !== null)
+		const existing = entries.filter((entry) => safeGet(STORAGE_KEY_PREFIX + entry.id) !== null)
+		if (existing.length !== entries.length) {
+			safeSet(PROJECTS_LIST_KEY, JSON.stringify(existing))
+		}
+		return existing
 	}
 
-	/**
-	 * Delete a project
-	 */
-	delete(id: string): void {
-		if (typeof window === 'undefined') return
-		
-		const key = STORAGE_KEY_PREFIX + id
-		localStorage.removeItem(key)
-
-		// Update projects list
-		const list = this.list().filter((p) => p.id !== id)
-		localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(list))
-	}
-
-	/**
-	 * Create a new empty project
-	 */
+	/** Create a new empty project (already persisted). */
 	createNew(name: string): Project {
 		const project: Project = {
 			id: crypto.randomUUID(),
@@ -127,31 +165,7 @@ export class ProjectStorage {
 			createdAt: Date.now(),
 			lastModified: Date.now(),
 		}
-		this.save(project)
-		return project
-	}
-
-	/**
-	 * Get storage size in bytes
-	 */
-	getStorageSize(): number {
-		if (typeof window === 'undefined') return 0
-		
-		let total = 0
-		for (let i = 0; i < localStorage.length; i++) {
-			const key = localStorage.key(i)
-			if (key?.startsWith(STORAGE_KEY_PREFIX)) {
-				total += (localStorage.getItem(key) || '').length
-			}
-		}
-		return total
-	}
-
-	/**
-	 * Check if storage is near limit (warning at 3MB)
-	 */
-	isStorageNearLimit(): boolean {
-		return this.getStorageSize() > 3 * 1024 * 1024 // 3MB
+		return this.save(project).project
 	}
 }
 
