@@ -1,6 +1,7 @@
 import { ChangeSet, Text } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { LSPPlugin, Workspace, type LSPClient, type WorkspaceFile } from '@codemirror/lsp-client'
+import { pathToUri, uriToPath } from './uri'
 
 export interface ProjectFileSnapshot {
 	path: string
@@ -14,20 +15,29 @@ export interface ProjectWorkspaceHost {
 	onNavigate(path: string): void
 }
 
-const TEXT_FILE = /\.(typ|md|mdx|bib|txt|csv|json|ya?ml|toml)$/i
+/**
+ * Project files that can enter the analysis world; binary project files (images,
+ * fonts) never can. Shared with the editor, which must only attach its LSP
+ * plugin to files this workspace is willing to open on the server.
+ */
+export const WORKSPACE_TEXT_FILE = /\.(typ|md|mdx|bib|txt|csv|json|ya?ml|toml)$/i
 
-export function pathToUri(path: string): string {
-	const encoded = path
-		.split('/')
-		.filter(Boolean)
-		.map(encodeURIComponent)
-		.join('/')
-	return `file:///${encoded}`
-}
-
-export function uriToPath(uri: string): string {
-	const pathname = new URL(uri).pathname
-	return decodeURIComponent(pathname).replace(/^\//, '')
+/**
+ * The LSP `languageId` for a project path. The editor's plugin and this
+ * workspace both derive it here: the server keys its document handling off it,
+ * so a hardcoded `typst` for every file (including the `.md`/`.json` files the
+ * workspace opens) would misreport their type.
+ */
+export function languageIdForPath(path: string): string {
+	const ext = path.toLowerCase().split('.').pop() ?? ''
+	if (ext === 'typ') return 'typst'
+	if (ext === 'md' || ext === 'mdx') return 'markdown'
+	if (ext === 'json') return 'json'
+	if (ext === 'yaml' || ext === 'yml') return 'yaml'
+	if (ext === 'toml') return 'toml'
+	if (ext === 'csv') return 'csv'
+	if (ext === 'bib') return 'bibtex'
+	return 'plaintext'
 }
 
 class ProjectWorkspaceFile implements WorkspaceFile {
@@ -50,17 +60,31 @@ class ProjectWorkspaceFile implements WorkspaceFile {
 	}
 }
 
+/** A pending `displayFile()` jump: its promise, and how to cancel its timeout. */
+interface PendingDisplay {
+	resolve: (view: EditorView | null) => void
+	timer: number
+}
+
 /**
- * A workspace backed by the in-memory project: every `*.typ` file of the
- * project is open on the language server (so `#import` analysis works across
- * files), while only the active file has an editor view.
+ * How long a definition jump waits for its document to be displayed. The editor
+ * switching files is what resolves it; a jump into a file the editor will not
+ * open ends as a miss.
+ */
+const DISPLAY_TIMEOUT_MS = 2000
+
+/**
+ * A workspace backed by the in-memory project: every text file of the project
+ * is open on the language server (so `#import` analysis works across files, and
+ * a definition jump into a project `.md`/`.json` finds a document to open),
+ * while only the active file has an editor view.
  */
 export class ProjectWorkspace extends Workspace {
 	#host: ProjectWorkspaceHost
 	#files = new Map<string, ProjectWorkspaceFile>()
 	#views = new Map<string, Set<EditorView>>()
 	#versions = new Map<string, number>()
-	#displayResolvers = new Map<string, (view: EditorView | null) => void>()
+	#displayResolvers = new Map<string, PendingDisplay>()
 	#connected = false
 
 	constructor(client: LSPClient, host: ProjectWorkspaceHost) {
@@ -75,16 +99,19 @@ export class ProjectWorkspace extends Workspace {
 	/** Add/remove project files on the server. Call on project changes. */
 	applyProject(files: readonly ProjectFileSnapshot[]): void {
 		const seen = new Set<string>()
-		let changed = false
+		// Only a change the server can see (a text document opened or closed)
+		// disturbs its focus. Adding an image, a font or a `.gitkeep` folder
+		// placeholder never reaches it, so the attached views stay untouched.
+		let serverChanged = false
 		for (const snapshot of files) {
-			if (!TEXT_FILE.test(snapshot.path)) continue
+			if (!WORKSPACE_TEXT_FILE.test(snapshot.path)) continue
 			const uri = pathToUri(snapshot.path)
 			seen.add(uri)
 			if (this.#files.has(uri)) continue
-			const file = this.#makeFile(uri, 'typst', Text.of(snapshot.content.split('\n')))
+			const file = this.#makeFile(uri, languageIdForPath(snapshot.path), Text.of(snapshot.content.split('\n')))
 			this.#files.set(uri, file)
 			if (this.#connected) this.client.didOpen(file)
-			changed = true
+			serverChanged = true
 		}
 		for (const uri of this.#files.keys()) {
 			if (seen.has(uri)) continue
@@ -92,12 +119,12 @@ export class ProjectWorkspace extends Workspace {
 			this.#views.delete(uri)
 			this.#versions.delete(uri)
 			if (this.#connected) this.client.didClose(uri)
-			changed = true
+			serverChanged = true
 		}
 		// Opening another file moves the server's focus, and the analysis only
 		// publishes diagnostics for the focused document — hand it back to the
-		// document the user is editing.
-		if (changed) {
+		// documents that have an editor attached.
+		if (serverChanged) {
 			for (const uri of this.#views.keys()) this.#reopen(uri)
 		}
 	}
@@ -109,6 +136,13 @@ export class ProjectWorkspace extends Workspace {
 
 	disconnected(): void {
 		this.#connected = false
+		// Drop pending jumps: their timers and closures would otherwise outlive
+		// the connection (and fire against a dead workspace).
+		for (const pending of this.#displayResolvers.values()) {
+			clearTimeout(pending.timer)
+			pending.resolve(null)
+		}
+		this.#displayResolvers.clear()
 		super.disconnected()
 	}
 
@@ -134,11 +168,7 @@ export class ProjectWorkspace extends Workspace {
 			this.#reopen(uri)
 		}
 
-		const resolve = this.#displayResolvers.get(uri)
-		if (resolve) {
-			this.#displayResolvers.delete(uri)
-			resolve(view)
-		}
+		this.#settleDisplay(uri, view)
 	}
 
 	/** Close and re-open a file, taking its text from the attached view. */
@@ -188,19 +218,26 @@ export class ProjectWorkspace extends Workspace {
 		const view = this.#viewFor(uri)
 		if (view) return view
 		if (!this.#files.has(uri)) return null
-		const previous = this.#displayResolvers.get(uri)
-		if (previous) previous(null)
+		// A second jump to the same file supersedes the first: settle it as a miss
+		// now instead of leaving it to time out on its own.
+		this.#settleDisplay(uri, null)
 		const { promise, resolve } = Promise.withResolvers<EditorView | null>()
 		const timer = self.setTimeout(() => {
 			this.#displayResolvers.delete(uri)
 			resolve(null)
-		}, 2000)
-		this.#displayResolvers.set(uri, (next) => {
-			clearTimeout(timer)
-			resolve(next)
-		})
+		}, DISPLAY_TIMEOUT_MS)
+		this.#displayResolvers.set(uri, { resolve, timer })
 		this.#host.onNavigate(uriToPath(uri))
 		return promise
+	}
+
+	/** Hand a view (or a miss) to the jump that is waiting for this URI. */
+	#settleDisplay(uri: string, view: EditorView | null): void {
+		const pending = this.#displayResolvers.get(uri)
+		if (!pending) return
+		this.#displayResolvers.delete(uri)
+		clearTimeout(pending.timer)
+		pending.resolve(view)
 	}
 
 	#viewFor(uri: string): EditorView | null {

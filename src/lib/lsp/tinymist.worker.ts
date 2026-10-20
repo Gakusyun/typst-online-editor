@@ -11,6 +11,7 @@
 //   embedded in the wasm build, which has text fonts but no math font), so
 //   valid documents using math report a vacuous "no font could be found"
 //   error. It is filtered below; the PDF pipeline compiles with real fonts.
+import { applyContentChanges } from './documentText'
 import {
 	loadTinymistModule,
 	type TinymistLanguageServer,
@@ -19,11 +20,24 @@ import {
 	type TinymistServerRequest,
 	type TinymistWasmModule,
 } from './tinymist'
+import { pathToUri } from './uri'
 
 interface DocState {
 	text: string
 	version: number
+	/** The `languageId` the document was opened with; a re-open must keep it. */
+	languageId: string
 }
+
+/**
+ * One Typst Universe package (`@preview/…`): being fetched, ready with its
+ * virtual root, or failed. `attempts` bounds the retries — a removed version
+ * must not send the analysis back to the registry on every pass.
+ */
+type PackageState =
+	| { status: 'fetching' }
+	| { status: 'ready'; root: string }
+	| { status: 'failed'; attempts: number }
 
 interface LspMessage {
 	jsonrpc: '2.0'
@@ -42,10 +56,23 @@ const USER_DOC_URI = /^file:\/\/\//
 let server: TinymistLanguageServer
 let wasmModule: TinymistWasmModule
 let ready = false
+// Startup failed for good: the server never comes up in this worker, so the
+// message queue below is not a buffer any more but a leak.
+let failed = false
 const events: number[] = []
 const pending: LspMessage[] = []
 const docs = new Map<string, DocState>()
-const packages = new Map<string, string | null>()
+const packages = new Map<string, PackageState>()
+/** The memory-document URIs each package opened, so eviction can close them. */
+const packageDocs = new Map<string, string[]>()
+/**
+ * Ready packages kept in the analysis world, oldest first. Every session that
+ * touches several `@preview` packages would otherwise pile their documents up
+ * for the lifetime of the worker.
+ */
+const PACKAGE_CACHE_LIMIT = 8
+/** A package that fails is retried this many times, then left alone. */
+const PACKAGE_FETCH_ATTEMPTS = 2
 const projectFiles = new Set<string>()
 
 self.onmessage = (e: MessageEvent<{ type: string; message?: string; paths?: string[] }>) => {
@@ -59,10 +86,21 @@ self.onmessage = (e: MessageEvent<{ type: string; message?: string; paths?: stri
 	// The wasm server takes seconds to download and instantiate; queue client
 	// messages until it is ready so nothing is lost.
 	if (!ready) {
-		pending.push(msg)
+		if (failed) answerUnavailable(msg)
+		else pending.push(msg)
 		return
 	}
 	void processMessage(msg)
+}
+
+/** Answers a request from a worker whose server never started; drops events. */
+function answerUnavailable(msg: LspMessage): void {
+	if (msg.id === undefined) return
+	post({
+		jsonrpc: '2.0',
+		id: msg.id,
+		error: { code: -32603, message: 'tinymist language server is unavailable' },
+	})
 }
 
 async function processMessage(msg: LspMessage): Promise<void> {
@@ -96,7 +134,12 @@ async function handleClientMessage(msg: LspMessage): Promise<void> {
 	}
 }
 
-function docTextDocument(params: unknown): { uri?: unknown; text?: unknown; version?: unknown } | null {
+function docTextDocument(params: unknown): {
+	uri?: unknown
+	text?: unknown
+	version?: unknown
+	languageId?: unknown
+} | null {
 	if (typeof params !== 'object' || params === null || !('textDocument' in params)) return null
 	const td = params.textDocument
 	if (typeof td !== 'object' || td === null) return null
@@ -108,28 +151,45 @@ function trackDocument(method: string, params: unknown): void {
 	if (!td || typeof td.uri !== 'string') return
 	const uri = td.uri
 	if (method === 'textDocument/didOpen' && typeof td.text === 'string') {
-		docs.set(uri, { text: td.text, version: typeof td.version === 'number' ? td.version : 1 })
+		docs.set(uri, {
+			text: td.text,
+			version: typeof td.version === 'number' ? td.version : 1,
+			languageId: typeof td.languageId === 'string' ? td.languageId : 'typst',
+		})
 	} else if (method === 'textDocument/didChange') {
 		const state = docs.get(uri)
-		const change = lastContentChange(params)
-		if (state && change) {
-			state.text = change
-			state.version = (typeof td.version === 'number' ? td.version : state.version) + 1
-		}
+		if (!state) return
+		const text = changedText(params, state.text)
+		if (text === null) return
+		state.text = text
+		// The client bumps `file.version` before it sends the change (see
+		// lsp-client's `Workspace#sync`), so this already *is* the new version.
+		// Mirror it verbatim: the nudge below reopens documents with the mirrored
+		// version, so an invented value would desync us from the client's counter.
+		state.version = typeof td.version === 'number' ? td.version : state.version
 	} else if (method === 'textDocument/didClose') {
 		docs.delete(uri)
 	}
 }
 
-function lastContentChange(params: unknown): string | null {
+/** The text a `didChange` produces, or null when the params carry no change. */
+function changedText(params: unknown, previous: string): string | null {
 	if (typeof params !== 'object' || params === null || !('contentChanges' in params)) return null
 	const changes = params.contentChanges
 	if (!Array.isArray(changes) || changes.length === 0) return null
-	const last = changes.at(-1)
-	if (typeof last !== 'object' || last === null || !('text' in last) || typeof last.text !== 'string') {
-		return null
+	// Fast path: below lsp-client's 1024-character sync threshold a change is a
+	// single whole-document replacement, which needs no range arithmetic.
+	if (changes.length === 1) {
+		const only = changes[0]
+		if (typeof only === 'object' && only !== null && !('range' in only)) {
+			const text = (only as { text?: unknown }).text
+			return typeof text === 'string' ? text : null
+		}
 	}
-	return last.text
+	// Longer documents arrive as ranged changes (the server advertises
+	// incremental sync, and tinymist does); applying only the last one used to
+	// shred the mirror.
+	return applyContentChanges(previous, changes)
 }
 
 function isLspError(value: unknown): value is { code: number; message: string } {
@@ -280,57 +340,93 @@ function packageKey(spec: TinymistPackageSpec): string {
 
 function resolvePackage(spec: TinymistPackageSpec): string | undefined {
 	const key = packageKey(spec)
-	const root = packages.get(key)
-	if (typeof root === 'string') return root
-	if (root === undefined) {
-		packages.set(key, null)
-		void fetchPackage(spec, key).catch((error) => {
+	const state = packages.get(key)
+	if (state?.status === 'ready') return state.root
+	// A version that cannot be fetched (removed, mistyped, registry down) must
+	// not put the registry back on the path of every later analysis pass.
+	if (state?.status === 'failed' && state.attempts >= PACKAGE_FETCH_ATTEMPTS) return undefined
+	if (state === undefined || state.status === 'failed') {
+		const attempts = state?.status === 'failed' ? state.attempts + 1 : 1
+		packages.set(key, { status: 'fetching' })
+		void fetchPackage(spec, key, attempts).catch((error) => {
 			console.warn('[tinymist] failed to load package', key, error)
-			packages.delete(key)
+			packages.set(key, { status: 'failed', attempts })
 		})
 	}
 	return undefined
 }
 
-async function fetchPackage(spec: TinymistPackageSpec, key: string): Promise<void> {
+async function fetchPackage(spec: TinymistPackageSpec, key: string, attempt: number): Promise<void> {
 	const url = `${PACKAGE_TARBALL_URL}/${spec.namespace}/${spec.name}-${spec.version}.tar.gz`
 	const response = await fetch(url)
 	if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
 	const data = new Uint8Array(await response.arrayBuffer())
 	const root = `/pkg/${spec.namespace}/${spec.name}/${spec.version}`
 	const ctx = new wasmModule.ProxyContext({})
+	// One memory document per text file: remember them so the package can be
+	// evicted as a whole later.
+	const opened: string[] = []
 	ctx.untar(data, (path, value) => {
 		if (!PACKAGE_TEXT_FILE.test(path)) return
-		openMemoryDoc(`${root}/${path}`, new TextDecoder().decode(value))
+		opened.push(openMemoryDoc(`${root}/${path}`, new TextDecoder().decode(value)))
 	})
-	packages.set(key, root)
+	packages.set(key, { status: 'ready', root })
+	packageDocs.set(key, opened)
+	evictPackages()
+	console.log('[tinymist] package ready', key, `attempt ${attempt}`, `${opened.length} files`)
 	nudgeUserDocsSoon()
 }
 
-function openMemoryDoc(path: string, text: string): void {
+/**
+ * Drops the packages that were fetched longest ago once the cap is exceeded,
+ * closing their memory documents with them.
+ */
+function evictPackages(): void {
+	const ready = [...packages].filter(([, state]) => state.status === 'ready')
+	if (ready.length <= PACKAGE_CACHE_LIMIT) return
+	for (const [key] of ready.slice(0, ready.length - PACKAGE_CACHE_LIMIT)) {
+		for (const uri of packageDocs.get(key) ?? []) {
+			docs.delete(uri)
+			server.on_notification('textDocument/didClose', { textDocument: { uri } })
+		}
+		packageDocs.delete(key)
+		packages.delete(key)
+		console.log('[tinymist] evicted package', key)
+	}
+}
+
+/** Opens a package document in the analysis world; returns its URI. */
+function openMemoryDoc(path: string, text: string): string {
 	const uri = pathToUri(path)
-	docs.set(uri, { text, version: 1 })
+	docs.set(uri, { text, version: 1, languageId: 'typst' })
 	server.on_notification('textDocument/didOpen', {
 		textDocument: { uri, languageId: 'typst', version: 1, text },
 	})
-}
-
-function pathToUri(path: string): string {
-	return `file:///${path.split('/').filter(Boolean).map(encodeURIComponent).join('/')}`
+	return uri
 }
 
 let nudgeTimer: number | undefined
 
+/**
+ * Re-runs the analysis of the open documents after something the server cannot
+ * see changed: project files appearing or disappearing, and a package's
+ * documents arriving after the document was already analyzed.
+ *
+ * Each document is closed and re-opened rather than sent as a `didChange`: LSP
+ * requires a strictly increasing version, and inventing one here would put our
+ * counter above the one `@codemirror/lsp-client` keeps — it sends its own
+ * version with the very next keystroke. A re-open restarts the analysis just as
+ * well, with the version both sides already agree on.
+ */
 function nudgeUserDocsSoon(): void {
 	clearTimeout(nudgeTimer)
 	nudgeTimer = self.setTimeout(() => {
 		if (!ready) return
 		for (const [uri, state] of docs) {
 			if (!USER_DOC_URI.test(uri) || uri.startsWith('file:///pkg/')) continue
-			state.version += 1
-			server.on_notification('textDocument/didChange', {
-				textDocument: { uri, version: state.version },
-				contentChanges: [{ text: state.text }],
+			server.on_notification('textDocument/didClose', { textDocument: { uri } })
+			server.on_notification('textDocument/didOpen', {
+				textDocument: { uri, languageId: state.languageId, version: state.version, text: state.text },
 			})
 		}
 		drainEvents()
@@ -378,6 +474,10 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
 	console.error('[tinymist] failed to start:', error)
+	// Terminal for this worker: `failed` stops the message buffer from growing
+	// for a server that will never read it (the client tears the worker down
+	// when it sees this status).
+	failed = true
 	;(self as unknown as Worker).postMessage({
 		type: 'status',
 		status: 'error',

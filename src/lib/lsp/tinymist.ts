@@ -55,13 +55,21 @@ export interface TinymistWasmModule {
 
 let modulePromise: Promise<TinymistWasmModule> | null = null
 
+async function fetchTinymistModule(): Promise<TinymistWasmModule> {
+	// Dynamic import is required here: TINYMIST_JS_URL is a remote CDN URL
+	// that must stay out of the bundle, so no static import can name it.
+	const mod = (await import(/* @vite-ignore */ TINYMIST_JS_URL)) as TinymistWasmModule
+	await mod.default({ module_or_path: TINYMIST_WASM_URL })
+	return mod
+}
+
 export function loadTinymistModule(): Promise<TinymistWasmModule> {
-	modulePromise ??= (async () => {
-		// Dynamic import is required here: TINYMIST_JS_URL is a remote CDN URL
-		// that must stay out of the bundle, so no static import can name it.
-		const mod = (await import(/* @vite-ignore */ TINYMIST_JS_URL)) as TinymistWasmModule
-		await mod.default({ module_or_path: TINYMIST_WASM_URL })
-		return mod
-	})()
+	modulePromise ??= fetchTinymistModule().catch((error: unknown) => {
+		// A CDN hiccup must not be cached: keeping the rejected promise here
+		// would make every retry a no-op, so the language server could only ever
+		// recover from a page reload.
+		modulePromise = null
+		throw error
+	})
 	return modulePromise
 }

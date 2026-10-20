@@ -39,7 +39,8 @@ import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { useI18n } from '@/lib/i18n/useI18n'
 import { useAppearance } from '@/lib/appearance/useAppearance'
 import { TinymistLspClient, type TinymistLspStatus } from '@/lib/lsp/tinymistClient'
-import { ProjectWorkspace, pathToUri } from '@/lib/lsp/projectWorkspace'
+import { ProjectWorkspace, WORKSPACE_TEXT_FILE, languageIdForPath } from '@/lib/lsp/projectWorkspace'
+import { pathToUri } from '@/lib/lsp/uri'
 import type { Project } from '@/lib/storage/ProjectStorage'
 import { editorHighlighting, editorTheme } from './theme'
 
@@ -69,6 +70,13 @@ const FONT_FILES = ['ttf', 'otf', 'woff', 'woff2']
  */
 const wordWrapCompartment = new Compartment()
 
+/**
+ * The placeholder is localized, so it gets its own compartment: switching the
+ * UI language swaps it in place instead of rebuilding the view (which would
+ * drop the undo history and the scroll position).
+ */
+const placeholderCompartment = new Compartment()
+
 function baseExtensions(placeholderText: string, wordWrap: boolean): Extension[] {
 	return [
 		wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
@@ -89,7 +97,7 @@ function baseExtensions(placeholderText: string, wordWrap: boolean): Extension[]
 		highlightActiveLine(),
 		highlightSelectionMatches(),
 		search({ top: true }),
-		cmPlaceholder(placeholderText),
+		placeholderCompartment.of(cmPlaceholder(placeholderText)),
 		keymap.of([
 			...closeBracketsKeymap,
 			...defaultKeymap,
@@ -166,6 +174,8 @@ export default function CodeEditor({
 	const activeFile = project.files.find((file) => file.path === activeFilePath)
 	const content = activeFile?.content ?? ''
 	const isTypstFile = activeFilePath.endsWith('.typ')
+	/** Files the workspace opens on the server (and therefore attaches a plugin to). */
+	const isTextFile = WORKSPACE_TEXT_FILE.test(activeFilePath)
 
 	// The language server lives for the whole editor session; the view is
 	// recreated when the active file changes.
@@ -186,8 +196,16 @@ export default function CodeEditor({
 				return workspace
 			},
 		})
-		workspaceRef.current?.applyProject(projectRef.current.files)
 		client.connect(tinymist.transport)
+		// `connect` alone never reports a failed handshake: the initialize
+		// exchange resolves `client.initializing`, and its rejection (a 60 s
+		// timeout, or the transport throwing because the worker is gone) was an
+		// unhandled rejection while the UI kept claiming the server was there.
+		void client.initializing.catch((error: unknown) => {
+			console.error('[tinymist] language server unavailable:', error)
+			setLspStatus('error')
+			setLspStatusDetail(error instanceof Error ? error.message : String(error))
+		})
 		const unsubscribe = tinymist.onStatus((status, detail) => {
 			setLspStatus(status)
 			setLspStatusDetail(detail)
@@ -204,9 +222,21 @@ export default function CodeEditor({
 		}
 	}, [])
 
+	/**
+	 * Only a change to the file *set* (create, delete, rename, import) can
+	 * change what the server has open: the project object is rebuilt on every
+	 * keystroke, and re-sending the path list then — which re-opens documents in
+	 * the workspace — is pure churn. The content itself is pushed either by the
+	 * editor's own change notifications or by the `sync()` below.
+	 */
+	const pathKey = project.files.map((file) => file.path).join('\u0000')
+
 	useEffect(() => {
-		workspaceRef.current?.applyProject(project.files)
-		lspRef.current?.setProjectFiles(project.files.map((file) => file.path))
+		workspaceRef.current?.applyProject(projectRef.current.files)
+		lspRef.current?.setProjectFiles(projectRef.current.files.map((file) => file.path))
+	}, [pathKey])
+
+	useEffect(() => {
 		// Push project-driven content changes (storage load, import, undo) that
 		// no editor view has synchronized yet.
 		lspClientRef.current?.sync()
@@ -227,8 +257,15 @@ export default function CodeEditor({
 				}
 			}),
 		]
-		if (isTypstFile && client) {
-			extensions.push(lintGutter(), client.plugin(pathToUri(activeFilePath), 'typst'))
+		if (client && isTextFile) {
+			// The workspace opens every text file of the project, and the plugin is
+			// what tells it a document is *displayed*: attaching it only for `.typ`
+			// left a go-to-definition into a project `.md`/`.json` waiting on a
+			// document that never appeared (and failing 2 s later).
+			extensions.push(
+				lintGutter(),
+				client.plugin(pathToUri(activeFilePath), languageIdForPath(activeFilePath))
+			)
 		}
 		const view = new EditorView({
 			state: EditorState.create({ doc: content, extensions }),
@@ -246,7 +283,15 @@ export default function CodeEditor({
 		// content is read from the project snapshot at (re)creation time; later
 		// external edits are applied by the sync effect below.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeFilePath, isBinaryFile, isTypstFile])
+	}, [activeFilePath, isBinaryFile, isTextFile])
+
+	// The placeholder text follows the UI language; a compartment swap keeps the
+	// view (and the scroll position) alive across the switch.
+	useEffect(() => {
+		viewRef.current?.dispatch({
+			effects: placeholderCompartment.reconfigure(cmPlaceholder(t('editor.typeHere'))),
+		})
+	}, [t])
 
 	// Word wrap toggles from Settings while the view lives; reconfigure the
 	// compartment instead of rebuilding the editor (which would reset scroll).
