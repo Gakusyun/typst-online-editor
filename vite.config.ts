@@ -37,6 +37,22 @@ export default defineConfig({
 							test: /node_modules[\\/]@myriaddreamin[\\/]/,
 							priority: 20,
 						},
+						// CodeMirror is split rather than lumped together: as one chunk it
+						// is ~800 KB and every build printed a size warning that told
+						// nothing (the editor needs all of it on the first frame, so it
+						// cannot be deferred). The groups below keep each part under the
+						// warning limit while a genuine bloat still trips it — which is
+						// what the limit is there for.
+						{
+							name: 'codemirror-core',
+							test: /node_modules[\\/]@codemirror[\\/](?:state|view|commands)[\\/]/,
+							priority: 14,
+						},
+						{
+							name: 'codemirror-language',
+							test: /node_modules[\\/](?:@codemirror[\\/](?:language|autocomplete|search|lint)|@lezer)[\\/]/,
+							priority: 13,
+						},
 						{
 							name: 'codemirror',
 							test: /node_modules[\\/](@codemirror|@lezer|codemirror-lang-typst)[\\/]/,
