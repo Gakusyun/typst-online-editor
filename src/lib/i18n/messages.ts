@@ -128,11 +128,16 @@ export const en = {
 	'preview.idleHint': 'Type to edit and compile',
 	'preview.idleStart': 'Click "Compile Now" or start typing to generate PDF',
 	'preview.done': 'Compilation complete',
+	'preview.engineFailed': 'Preview engine could not start',
+	'preview.engineFailedHint': 'The PDF viewer is loaded from a CDN and is unreachable right now. Check the network, then compile again — the preview recovers without a reload.',
+	'preview.loadFailed': 'The PDF could not be loaded',
+	'preview.loadFailedHint': 'The document compiled, but the preview could not read the result. Compile again to retry.',
 
 	// Code editor
 	'editor.typeHere': 'Type here...',
 	'editor.lspLoading': 'Starting language service…',
 	'editor.lspUnavailable': 'Language service unavailable',
+	'editor.lspRetry': 'Retry',
 	'editor.imageContent': 'This is an image (binary data). Content too large to show here.',
 	'editor.fontContent': 'This is a font file (binary data). Content too large to show here.',
 
@@ -312,11 +317,16 @@ export const zh: Messages = {
 	'preview.idleHint': '输入内容即可编辑并编译',
 	'preview.idleStart': '点击“立即编译”或开始输入即可生成 PDF',
 	'preview.done': '编译完成',
+	'preview.engineFailed': '预览引擎加载失败',
+	'preview.engineFailedHint': 'PDF 预览引擎从 CDN 加载，当前无法访问。请检查网络后重新编译——无需刷新页面即可恢复。',
+	'preview.loadFailed': 'PDF 加载失败',
+	'preview.loadFailedHint': '文档已编译，但预览无法读取结果。请重新编译以重试。',
 
 	// Code editor
 	'editor.typeHere': '在此输入…',
 	'editor.lspLoading': '正在启动语言服务…',
 	'editor.lspUnavailable': '语言服务不可用',
+	'editor.lspRetry': '重试',
 	'editor.imageContent': '这是一个图片文件（二进制数据），内容过大，无法在此显示。',
 	'editor.fontContent': '这是一个字体文件（二进制数据），内容过大，无法在此显示。',
 
@@ -478,11 +488,16 @@ export const de: Messages = {
 	'preview.idleHint': 'Zum Bearbeiten und Kompilieren tippen',
 	'preview.idleStart': 'Zum Erzeugen einer PDF „Jetzt kompilieren“ anklicken oder direkt tippen',
 	'preview.done': 'Kompilierung abgeschlossen',
+	'preview.engineFailed': 'Die Vorschau-Engine konnte nicht gestartet werden',
+	'preview.engineFailedHint': 'Der PDF-Viewer wird von einem CDN geladen und ist gerade nicht erreichbar. Netzwerk prüfen und erneut kompilieren — die Vorschau erholt sich ohne Neuladen.',
+	'preview.loadFailed': 'Die PDF konnte nicht geladen werden',
+	'preview.loadFailedHint': 'Das Dokument wurde kompiliert, aber die Vorschau konnte das Ergebnis nicht lesen. Erneut kompilieren, um es erneut zu versuchen.',
 
 	// Code editor
 	'editor.typeHere': 'Hier tippen …',
 	'editor.lspLoading': 'Sprachdienst wird gestartet …',
 	'editor.lspUnavailable': 'Sprachdienst nicht verfügbar',
+	'editor.lspRetry': 'Erneut versuchen',
 	'editor.imageContent': 'Dies ist eine Bilddatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 	'editor.fontContent': 'Dies ist eine Schriftdatei (Binärdaten). Der Inhalt ist zu groß für die Anzeige.',
 
