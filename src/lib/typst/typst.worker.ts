@@ -2,6 +2,7 @@
 
 import {
 	createTypstCompiler,
+	createTypstFontBuilder,
 	loadFonts,
 	type TypstCompiler,
 	FetchPackageRegistry,
@@ -92,9 +93,14 @@ function getWasmBytes(): Promise<ArrayBuffer> {
 type CompilerFont = string | Uint8Array<ArrayBuffer>
 
 /**
- * Creates a compiler with specified fonts
+ * Creates the one compiler this worker owns.
+ *
+ * Fonts are deliberately not installed here — `installFonts` swaps them onto the
+ * live compiler instead, so a font change never needs a second compiler (and
+ * never needs the memory of one). `loadFonts` below installs nothing and exists
+ * only because `TypstCompiler.init` refuses to build without a font loader.
  */
-async function createCompilerWithFonts(fonts: CompilerFont[]): Promise<TypstCompiler> {
+async function createCompiler(): Promise<TypstCompiler> {
 	const compiler = createTypstCompiler();
 	await compiler.init({
 		getModule: async () => await getWasmBytes(),
@@ -102,12 +108,40 @@ async function createCompilerWithFonts(fonts: CompilerFont[]): Promise<TypstComp
 			// `assets: false` is required: with no options, TypstCompiler.init() appends a
 			// default font loader ({assets: ['text']}) that downloads typst's default font
 			// set from cdn.jsdelivr.net behind our back.
-			loadFonts(fonts, { assets: false, fetcher: fetchCdn }),
+			loadFonts([], { assets: false, fetcher: fetchCdn }),
 			withAccessModel(accessModel),
 			withPackageRegistry(packageRegistry)
 		]
 	});
 	return compiler;
+}
+
+/**
+ * Points `compiler` at exactly `fonts`, whatever it carried before.
+ *
+ * The resolver is built from the font bytes and handed over inside `build`'s
+ * callback — the documented lifetime: `TypstCompiler.setFonts` keeps the
+ * compiler's own reference and `build` drops the caller's once the callback
+ * returns. Font bytes are read from the (cached) CDN response on every change
+ * rather than kept in JS: a permanent copy would double the font memory, which
+ * is the very thing this is about.
+ */
+async function installFonts(compiler: TypstCompiler, fonts: CompilerFont[]): Promise<void> {
+	const builder = createTypstFontBuilder();
+	await builder.init({ getModule: async () => await getWasmBytes() });
+	// Fetch first and in parallel: `addFontData` is sequential wasm work, but the
+	// network is not, and the CDN round trips are what a font change costs.
+	const bytes = await Promise.all(
+		fonts.map(async (font) =>
+			typeof font === 'string' ? new Uint8Array(await (await fetchCdn(font)).arrayBuffer()) : font
+		)
+	);
+	for (const font of bytes) {
+		await builder.addFontData(font);
+	}
+	await builder.build(async (resolver) => {
+		compiler.setFonts(resolver);
+	});
 }
 
 /**
@@ -131,16 +165,6 @@ function needsCJKFont(text: string): boolean {
 }
 
 /**
- * Gets the current font set based on loaded fonts
- */
-function getCurrentFonts(): string[] {
-	const fonts = fontUrls(CORE_FONTS);
-	if (emojiLoaded) fonts.push(...fontUrls(EMOJI_FONTS));
-	if (cjkLoaded) fonts.push(...fontUrls(CJK_FONTS));
-	return fonts;
-}
-
-/**
  * Detects custom font files in the images/fonts collection
  */
 function detectCustomFonts(images: CompileImages): string[] {
@@ -160,29 +184,18 @@ function carriesFonts(paths: string[]): boolean {
 // ============================================================================
 
 /**
- * Upgrades compiler with emoji fonts (lazy loading)
+ * The compiler's own interface has no teardown — only `reset()`, which keeps the
+ * instance. The wasm handle it wraps does have `free()`, and that is what returns
+ * the Rust side (font book, caches, shadow files) to the wasm allocator instead
+ * of leaving it for the garbage collector.
  */
-async function upgradeCompilerWithEmoji(images: CompileImages): Promise<void> {
-	if (emojiLoaded) return;
+type WasmCompiler = TypstCompiler & { compiler: { free(): void } };
 
-	console.log('[Typst] Upgrading compiler with emoji fonts...');
-	await rebuildCompilerWithFonts(images);
-	// Only after the rebuilt compiler exists: setting it first meant one failed
-	// CDN fetch left the emoji fonts missing for the worker's whole lifetime.
-	emojiLoaded = true;
-	console.log('[Typst] Emoji fonts loaded successfully');
-}
-
-/**
- * Upgrades compiler with CJK fonts (lazy loading)
- */
-async function upgradeCompilerWithCJK(images: CompileImages): Promise<void> {
-	if (cjkLoaded) return;
-
-	console.log('[Typst] Upgrading compiler with CJK fonts...');
-	await rebuildCompilerWithFonts(images);
-	cjkLoaded = true;
-	console.log('[Typst] CJK fonts loaded successfully');
+function freeCompiler(compiler: TypstCompiler): void {
+	// `TypstCompilerDriver` exposes the wasm handle as its `compiler` field; the
+	// `TypstCompiler` interface the package exports does not.
+	const handle = compiler as WasmCompiler;
+	handle.compiler.free();
 }
 
 /**
@@ -198,7 +211,7 @@ function getCompiler(): Promise<TypstCompiler> {
 	if (compilerPromise) return compilerPromise;
 
 	console.log('[Typst] Initializing new compiler instance');
-	const created = createCompilerWithFonts(fontUrls(CORE_FONTS)).catch((error) => {
+	const created = createCompiler().catch((error) => {
 		// A rejected promise must not be cached: a single CDN hiccup used to make
 		// every later compile re-await the same rejection.
 		compilerPromise = null;
@@ -208,8 +221,12 @@ function getCompiler(): Promise<TypstCompiler> {
 	return created;
 }
 
-/** Forgets the current compiler; the next compile builds a fresh one. */
+/**
+ * Drops the current compiler and returns its memory to the wasm allocator. The
+ * next compile builds a fresh one.
+ */
 function dropCompiler(): void {
+	const dropped = compilerPromise;
 	compilerPromise = null;
 	emojiLoaded = false;
 	cjkLoaded = false;
@@ -217,36 +234,46 @@ function dropCompiler(): void {
 	fontsNeedRebuild = true;
 	sourcedFiles = new Map();
 	shadowedBinaries = new Map();
+	void dropped?.then(freeCompiler).catch(() => {
+		// It never came up, so there is nothing to free.
+	});
 }
 
 /**
- * Rebuilds the compiler with every font it should carry: the CDN assets and the
- * project's own font files. Also re-applies them after the compiler was dropped.
+ * Makes the compiler carry exactly the fonts this document needs: the CDN
+ * assets, the lazily added emoji/CJK sets, and the project's own font files.
  *
- * The replaced instance is dropped without a teardown — typst.ts exposes no
- * `free()`/`dispose()` on a compiler driver (only `reset()`, which keeps the
- * wasm instance) — so its wasm memory is reclaimed only once it is collected.
- * [known limitation, documented in AGENTS.md]
+ * This is a hot swap (`TypstCompiler.setFonts`), not a rebuild: the compiler
+ * instance — and the wasm instance behind it — lives until it is dropped, so a
+ * font change allocates no second compiler and leaks no first one.
+ *
+ * `wants` is the set the caller is aiming at, not the flags as they stand: the
+ * flags are committed here, *after* the fonts are in, so one failed CDN fetch
+ * leaves the worker retrying instead of claiming fonts it never got.
  */
-async function rebuildCompilerWithFonts(images: CompileImages): Promise<void> {
+async function loadFontAssets(images: CompileImages, wants: { emoji: boolean; cjk: boolean }): Promise<void> {
 	const customFontPaths = detectCustomFonts(images);
-	console.log('[Typst] Rebuilding compiler with', customFontPaths.length, 'project fonts');
+	const fonts: CompilerFont[] = [...fontUrls(CORE_FONTS)];
+	if (wants.emoji) fonts.push(...fontUrls(EMOJI_FONTS));
+	if (wants.cjk) fonts.push(...fontUrls(CJK_FONTS));
+	fonts.push(...customFontPaths.map((path) => images[path]));
+	console.log('[Typst] Loading', fonts.length, 'fonts,', customFontPaths.length, 'of them project fonts');
 
-	const newCompiler = await createCompilerWithFonts([
-		...getCurrentFonts(),
-		...customFontPaths.map((path) => images[path])
-	]);
-	compilerPromise = Promise.resolve(newCompiler);
+	const compiler = await getCompiler();
+	// `reset()` drops the caches a replaced font book would otherwise leave behind
+	// ("loaded fonts" among them). It is documented as independent of the shadow
+	// files, but the tracking maps below are cleared either way so every source
+	// and binary is re-sent: `reset()` may also drop what `addSource` filed away.
+	await compiler.reset();
+	await installFonts(compiler, fonts);
 
-	// A different compiler instance starts with an empty virtual file system:
-	// whatever the previous one had been told has to be sent again.
-	sourcedFiles = new Map();
-	shadowedBinaries = new Map();
-
-	// Track loaded custom fonts
+	emojiLoaded = wants.emoji;
+	cjkLoaded = wants.cjk;
 	loadedCustomFonts.clear();
 	customFontPaths.forEach(path => loadedCustomFonts.add(path));
 	fontsNeedRebuild = false;
+	sourcedFiles = new Map();
+	shadowedBinaries = new Map();
 
 	console.log('[Typst] Fonts loaded successfully');
 }
@@ -317,19 +344,15 @@ async function compilePdf(
 ): Promise<Uint8Array<ArrayBuffer>> {
 	try {
 		const customFontPaths = detectCustomFonts(images);
-
-		if (fontsNeedRebuild || !carriesFonts(customFontPaths)) {
-			// A project font appeared or disappeared, or the compiler was dropped:
-			// the font set only changes by rebuilding the compiler.
-			await rebuildCompilerWithFonts(images);
-		} else {
-			// Lazily-added font assets rebuild too. The scan only runs while one of
-			// them is still missing: it copies the whole project text.
-			if (!emojiLoaded || !cjkLoaded) {
-				const allContent = Object.values(files).join('\n');
-				if (!emojiLoaded && needsEmojiFont(allContent)) await upgradeCompilerWithEmoji(images);
-				if (!cjkLoaded && needsCJKFont(allContent)) await upgradeCompilerWithCJK(images);
-			}
+		// The scan copies the whole project text, so it runs only while one of the
+		// lazily loaded font sets is still missing.
+		const allContent = emojiLoaded && cjkLoaded ? '' : Object.values(files).join('\n');
+		const wantEmoji = emojiLoaded || needsEmojiFont(allContent);
+		const wantCjk = cjkLoaded || needsCJKFont(allContent);
+		// A project font appeared or disappeared, a lazily loaded set is now needed,
+		// or the compiler was dropped: each of those changes the font set.
+		if (fontsNeedRebuild || !carriesFonts(customFontPaths) || wantEmoji !== emojiLoaded || wantCjk !== cjkLoaded) {
+			await loadFontAssets(images, { emoji: wantEmoji, cjk: wantCjk });
 		}
 
 		return await runCompile(files, mainFile, images, imageVersions);
