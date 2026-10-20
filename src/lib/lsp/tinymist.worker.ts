@@ -242,8 +242,16 @@ function isVacuousFontDiagnostic(d: unknown): boolean {
 function isMissingProjectFileDiagnostic(d: unknown, uri: string, text: string): boolean {
 	if (typeof d !== 'object' || d === null || !('message' in d) || !('range' in d)) return false
 	if (typeof d.message !== 'string' || !d.message.startsWith('failed to load file')) return false
-	const ref = referencedPath(text, d.range)
-	return ref !== null && isProjectFile(uri, ref)
+	const refs = referencedPaths(text, d.range)
+	// Nothing to check means nothing was understood, and an ununderstood
+	// diagnostic is kept: a real missing file must never be swallowed.
+	if (refs.length === 0) return false
+	// A range can name several paths (`#include("a.typ", "b.typ")` is one call with
+	// two candidates), and the diagnostic does not say which one failed. Suppress
+	// only when *every* candidate is a project file: whatever it is about then
+	// exists in the project, so the failure is one of the false positives this
+	// filter exists for. Suppressing on "some" would hide a genuine missing file.
+	return refs.every((ref) => isProjectFile(uri, ref))
 }
 
 interface LspPosition {
@@ -259,16 +267,25 @@ function asPosition(value: unknown): LspPosition | null {
 	return { line: value.line, character: value.character }
 }
 
-function referencedPath(text: string, range: unknown): string | null {
+/**
+ * Every path a diagnostic's range may name, in source order: its quoted string
+ * literals, or the range text itself when it *is* the path (a reference whose
+ * range covers the value rather than the literal). An empty slice means the
+ * mirror and the server disagree about the document — which is why callers get
+ * no candidate at all rather than a guessed one.
+ */
+function referencedPaths(text: string, range: unknown): string[] {
 	if (typeof range !== 'object' || range === null || !('start' in range) || !('end' in range)) {
-		return null
+		return []
 	}
 	const start = asPosition(range.start)
 	const end = asPosition(range.end)
-	if (!start || !end) return null
+	if (!start || !end) return []
 	const slice = text.slice(docOffset(text, start), docOffset(text, end))
-	const quoted = /["']([^"']+)["']/.exec(slice)
-	return quoted ? quoted[1] : slice.trim() || null
+	const literals = Array.from(slice.matchAll(/["']([^"']+)["']/g), (match) => match[1])
+	if (literals.length > 0) return literals
+	const bare = slice.trim()
+	return bare ? [bare] : []
 }
 
 function docOffset(text: string, pos: LspPosition): number {
