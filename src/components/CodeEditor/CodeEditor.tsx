@@ -77,6 +77,13 @@ const wordWrapCompartment = new Compartment()
  */
 const placeholderCompartment = new Compartment()
 
+/**
+ * The language-server plugin is bound to one `LSPClient`, so a retry has to swap
+ * it — in a compartment, for the same reason as the placeholder: rebuilding the
+ * view would cost the user their undo history and scroll position.
+ */
+const lspPluginCompartment = new Compartment()
+
 function baseExtensions(placeholderText: string, wordWrap: boolean): Extension[] {
 	return [
 		wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
@@ -134,6 +141,17 @@ function typstLanguage(): LanguageSupport {
 	return new LanguageSupport(support.language, parts)
 }
 
+/**
+ * The language-server extensions for one file. The workspace opens every text
+ * file of the project, and the plugin is what tells it a document is *displayed*:
+ * attaching it only for `.typ` left a go-to-definition into a project `.md` /
+ * `.json` waiting on a document that never appeared (and failing 2 s later).
+ */
+function lspPlugin(client: LSPClient | null, path: string, isTextFile: boolean): Extension[] {
+	if (!client || !isTextFile) return []
+	return [lintGutter(), client.plugin(pathToUri(path), languageIdForPath(path))]
+}
+
 /** The non-empty selection of `view`, or `null` (a bare cursor is not one). */
 function readSelection(view: EditorView): EditorSelection | null {
 	const range = view.state.selection.main
@@ -161,6 +179,12 @@ export default function CodeEditor({
 	const onSelectionChangeRef = useRef(onSelectionChange)
 	const [lspStatus, setLspStatus] = useState<TinymistLspStatus>('loading')
 	const [lspStatusDetail, setLspStatusDetail] = useState<string | undefined>()
+	/**
+	 * Bumped by the retry action: it tears the language server down and builds a
+	 * fresh one — the only way back after a startup failure, since the client
+	 * terminates its worker the moment it reports an error.
+	 */
+	const [lspEpoch, setLspEpoch] = useState(0)
 
 	projectRef.current = project
 	onChangeRef.current = onChange
@@ -177,8 +201,8 @@ export default function CodeEditor({
 	/** Files the workspace opens on the server (and therefore attaches a plugin to). */
 	const isTextFile = WORKSPACE_TEXT_FILE.test(activeFilePath)
 
-	// The language server lives for the whole editor session; the view is
-	// recreated when the active file changes.
+	// The language server outlives the view (which is recreated when the active
+	// file changes), but not a retry: see `lspEpoch`.
 	useEffect(() => {
 		const tinymist = new TinymistLspClient()
 		const client = new LSPClient({
@@ -220,7 +244,7 @@ export default function CodeEditor({
 			lspClientRef.current = null
 			workspaceRef.current = null
 		}
-	}, [])
+	}, [lspEpoch])
 
 	/**
 	 * Only a change to the file *set* (create, delete, rename, import) can
@@ -234,7 +258,9 @@ export default function CodeEditor({
 	useEffect(() => {
 		workspaceRef.current?.applyProject(projectRef.current.files)
 		lspRef.current?.setProjectFiles(projectRef.current.files.map((file) => file.path))
-	}, [pathKey])
+		// A fresh server and workspace know nothing yet, so the same push happens
+		// again whenever `lspEpoch` builds one.
+	}, [pathKey, lspEpoch])
 
 	useEffect(() => {
 		// Push project-driven content changes (storage load, import, undo) that
@@ -256,17 +282,8 @@ export default function CodeEditor({
 					onSelectionChangeRef.current?.(readSelection(update.view))
 				}
 			}),
+			lspPluginCompartment.of(lspPlugin(client, activeFilePath, isTextFile)),
 		]
-		if (client && isTextFile) {
-			// The workspace opens every text file of the project, and the plugin is
-			// what tells it a document is *displayed*: attaching it only for `.typ`
-			// left a go-to-definition into a project `.md`/`.json` waiting on a
-			// document that never appeared (and failing 2 s later).
-			extensions.push(
-				lintGutter(),
-				client.plugin(pathToUri(activeFilePath), languageIdForPath(activeFilePath))
-			)
-		}
 		const view = new EditorView({
 			state: EditorState.create({ doc: content, extensions }),
 			parent: hostRef.current,
@@ -284,6 +301,21 @@ export default function CodeEditor({
 		// external edits are applied by the sync effect below.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeFilePath, isBinaryFile, isTextFile])
+
+	// A retry replaces the client, and the plugin is bound to the old one. Swap it
+	// in its compartment instead of rebuilding the view: the document, the undo
+	// history and the scroll position all survive the retry. Skipped on mount —
+	// the view effect has just installed the same thing.
+	useEffect(() => {
+		if (lspEpoch === 0) return
+		const view = viewRef.current
+		if (!view || isBinaryFile) return
+		view.dispatch({
+			effects: lspPluginCompartment.reconfigure(
+				lspPlugin(lspClientRef.current, activeFilePath, isTextFile)
+			),
+		})
+	}, [lspEpoch])
 
 	// The placeholder text follows the UI language; a compartment swap keeps the
 	// view (and the scroll position) alive across the switch.
@@ -340,8 +372,21 @@ export default function CodeEditor({
 			<div className="px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm text-gray-400 flex items-center justify-between gap-3">
 				<span className="truncate">{activeFilePath}</span>
 				{lspStatusText && (
-					<span className="shrink-0 text-xs" title={lspStatusDetail}>
-						{lspStatusText}
+					<span className="shrink-0 flex items-center gap-2 text-xs" title={lspStatusDetail}>
+						<span className={lspStatus === 'error' ? 'text-red-400' : ''}>{lspStatusText}</span>
+						{lspStatus === 'error' && (
+							<>
+								{/* The reason is what separates a blocked CDN from a dead network. */}
+								<span className="max-w-56 truncate text-gray-500">{lspStatusDetail}</span>
+								<button
+									type="button"
+									onClick={() => setLspEpoch((epoch) => epoch + 1)}
+									className="px-2 py-0.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700"
+								>
+									{t('editor.lspRetry')}
+								</button>
+							</>
+						)}
 					</span>
 				)}
 			</div>
