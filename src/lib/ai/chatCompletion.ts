@@ -79,6 +79,35 @@ export function chatCompletionsUrl(baseUrl: string): string {
 	return `${url}/v1/chat/completions`
 }
 
+/**
+ * The absolute URL a request goes to, or an `AiError` saying why the configured
+ * value cannot be used.
+ *
+ * The bearer token rides on whatever origin this URL names, so a relative value
+ * must never reach `fetch`: a scheme-less typo (`api.openai.com/v1`) would be
+ * resolved against the editor's own origin and hand the key to the host that
+ * serves the app — where it would land in that server's logs. A plain `http:`
+ * endpoint is allowed (local servers often have no TLS), only announced.
+ */
+function endpointFor(baseUrl: string): { url: string; insecure: boolean } {
+	const value = baseUrl.trim()
+	if (value === '') throw new AiError('not-configured', 'no endpoint configured')
+	let protocol: string
+	try {
+		protocol = new URL(value).protocol
+	} catch {
+		// Not absolute at all — `fetch` would resolve it against this page.
+		protocol = ''
+	}
+	if (protocol !== 'https:' && protocol !== 'http:') {
+		throw new AiError(
+			'not-configured',
+			`"${value}" is not an absolute http(s) URL — include the scheme, e.g. https://api.openai.com/v1`
+		)
+	}
+	return { url: chatCompletionsUrl(value), insecure: protocol === 'http:' }
+}
+
 function asAiError(error: unknown, baseUrl: string): AiError {
 	if (error instanceof AiError) return error
 	if (error instanceof DOMException && error.name === 'AbortError') {
@@ -139,25 +168,33 @@ async function readEventStream(
 	onDelta?: (delta: string) => void
 ): Promise<string> {
 	const reader = body.getReader()
-	const decoder = new TextDecoder()
-	let buffer = ''
-	let reply = ''
-	for (;;) {
-		const { done, value } = await reader.read()
-		if (done) break
-		buffer += decoder.decode(value, { stream: true })
-		// Only complete lines are consumed; a chunk boundary can split one.
-		const lines = buffer.split(/\r?\n/)
-		buffer = lines.pop() ?? ''
-		for (const line of lines) {
-			const delta = parseEventLine(line)
-			if (delta === null) continue
-			if (delta === '[DONE]') return reply
-			reply += delta
-			onDelta?.(delta)
+	try {
+		const decoder = new TextDecoder()
+		let buffer = ''
+		let reply = ''
+		for (;;) {
+			const { done, value } = await reader.read()
+			if (done) break
+			buffer += decoder.decode(value, { stream: true })
+			// Only complete lines are consumed; a chunk boundary can split one.
+			const lines = buffer.split(/\r?\n/)
+			buffer = lines.pop() ?? ''
+			for (const line of lines) {
+				const delta = parseEventLine(line)
+				if (delta === null) continue
+				if (delta === '[DONE]') return reply
+				reply += delta
+				onDelta?.(delta)
+			}
 		}
+		return reply
+	} finally {
+		// `[DONE]`, a stop and a failure all leave the reader holding the rest of
+		// the response open; cancelling is what tells the endpoint to stop. An
+		// aborted request has already errored the stream, so the rejection is
+		// expected there too.
+		await reader.cancel().catch(() => {})
 	}
-	return reply
 }
 
 /**
@@ -171,9 +208,15 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<st
 	if (baseUrl.trim() === '' || model.trim() === '') {
 		throw new AiError('not-configured', 'no endpoint or model configured')
 	}
+	const endpoint = endpointFor(baseUrl)
+	if (endpoint.insecure) {
+		// Legitimate for a local server, but the request body — the document and
+		// the token, when there is one — is readable by every hop.
+		console.warn(`[ai] the endpoint ${endpoint.url} uses plain http; the request is not encrypted`)
+	}
 	let response: Response
 	try {
-		response = await fetch(chatCompletionsUrl(baseUrl), {
+		response = await fetch(endpoint.url, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

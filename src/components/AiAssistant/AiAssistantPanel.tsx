@@ -57,9 +57,14 @@ interface AiAssistantPanelProps {
 	 */
 	fullPage?: boolean
 	/** Snapshot of what the model may rewrite, taken when a request is sent. */
-	getTarget: (scope: AiEditScope) => AiEditTarget
+	getTarget: (scope: AiEditScope) => AiEditTarget | null
 	/** Put a reply back into the document, or just edit the buffer. */
 	onApply: (code: string, target: AiEditTarget) => void
+	/**
+	 * False when the active file has no source to rewrite (an image or a font is
+	 * stored as a base64 `data:` URL): the composer says why instead of sending.
+	 */
+	canEdit?: boolean
 	onOpenSettings: () => void
 }
 
@@ -109,6 +114,7 @@ export default function AiAssistantPanel({
 	fullPage = false,
 	getTarget,
 	onApply,
+	canEdit = true,
 	onOpenSettings,
 }: AiAssistantPanelProps) {
 	const { t } = useI18n()
@@ -126,10 +132,23 @@ export default function AiAssistantPanel({
 	const chat = useAiChat(getTarget)
 	const configured = isAiConfigured(settings)
 
+	// An override that outlives the selection it was chosen for would quietly
+	// disagree with the highlighted button (which falls back to "document").
+	useEffect(() => {
+		if (scopeOverride === 'selection' && !hasSelection) setScopeOverride(null)
+	}, [scopeOverride, hasSelection])
+
+	const listener = useRef<HTMLTextAreaElement | null>(null)
+
 	useEffect(() => {
 		if (!isOpen) return
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onClose()
+			if (e.key !== 'Escape' || e.defaultPrevented) return
+			// Escape while writing an instruction would throw the drawer away
+			// mid-sentence; the composer keeps its own Escape (the panel stays
+			// mounted while hidden, so the draft survives either way).
+			if (document.activeElement === listener.current) return
+			onClose()
 		}
 		window.addEventListener('keydown', onKeyDown)
 		return () => window.removeEventListener('keydown', onKeyDown)
@@ -191,6 +210,7 @@ export default function AiAssistantPanel({
 							onClick={chat.clear}
 							className="p-1 rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
 							title={t('ai.clear')}
+							aria-label={t('ai.clear')}
 						>
 							<Trash2 className="w-4 h-4" />
 						</button>
@@ -199,6 +219,7 @@ export default function AiAssistantPanel({
 						onClick={onClose}
 						className="p-1 rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
 						title={t('common.close')}
+						aria-label={t('common.close')}
 					>
 						<X className="w-4 h-4" />
 					</button>
@@ -219,7 +240,8 @@ export default function AiAssistantPanel({
 
 			<div className="px-4 py-2 border-b border-gray-700">
 				<p className="truncate text-xs text-gray-400" title={activeFilePath}>
-					{t('ai.fileLabel')}：<span className="font-mono text-gray-300">{activeFilePath}</span>
+					{t('ai.fileLabel')}
+					<span className="font-mono text-gray-300">{activeFilePath}</span>
 					{scope === 'selection' && selection && (
 						<span className="ml-2 text-gray-400">
 							{hasSelection
@@ -237,7 +259,14 @@ export default function AiAssistantPanel({
 				</div>
 			</div>
 
-			<div ref={listRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+			<div
+				ref={listRef}
+				// A chat transcript: `role="log"` announces appended replies (and
+				// their streaming growth) without re-reading the whole list.
+				role="log"
+				aria-busy={chat.isStreaming}
+				className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+			>
 				{chat.turns.length === 0 && <p className="text-xs text-gray-500">{t('ai.emptyHint')}</p>}
 				{chat.turns.map((turn) =>
 					turn.role === 'user' ? (
@@ -258,7 +287,7 @@ export default function AiAssistantPanel({
 										)}
 									</span>
 								</p>
-							) : turn.content === '' ? (
+							) : turn.streaming && turn.content === '' ? (
 								<p className="flex items-center gap-2 text-xs text-gray-400">
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
 									{t('ai.streaming')}
@@ -301,6 +330,7 @@ export default function AiAssistantPanel({
 
 			<div className="border-t border-gray-700 px-4 py-3">
 				<textarea
+					ref={listener}
 					value={instruction}
 					onInput={(e) => setInstruction(e.currentTarget.value)}
 					onKeyDown={(e) => {
@@ -310,11 +340,14 @@ export default function AiAssistantPanel({
 						}
 					}}
 					rows={3}
+					aria-label={t('ai.instructionPlaceholder')}
 					placeholder={t('ai.instructionPlaceholder')}
 					className="w-full resize-none bg-gray-900 text-gray-100 text-xs rounded border border-gray-600 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
 				/>
 				<div className="mt-2 flex items-center justify-between gap-2">
-					<span className="text-xs text-gray-500">{t('ai.sendHint')}</span>
+					<span className="text-xs text-gray-500">
+						{canEdit ? t('ai.sendHint') : t('ai.binaryFileHint')}
+					</span>
 					{chat.isStreaming ? (
 						<button
 							onClick={chat.stop}
@@ -326,7 +359,7 @@ export default function AiAssistantPanel({
 					) : (
 						<button
 							onClick={send}
-							disabled={!configured || instruction.trim() === ''}
+							disabled={!canEdit || !configured || instruction.trim() === ''}
 							className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 						>
 							<Send className="w-3.5 h-3.5" />
