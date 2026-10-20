@@ -28,6 +28,7 @@ export default function FileExplorerActions({
 					onClick={onCreateFile}
 					className="flex-1 flex items-center justify-center p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
 					title={t('files.newFile')}
+					aria-label={t('files.newFile')}
 				>
 					<FilePlus className="w-4 h-4" />
 				</button>
@@ -35,6 +36,7 @@ export default function FileExplorerActions({
 					onClick={onCreateFolder}
 					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
 					title={t('files.newFolder')}
+					aria-label={t('files.newFolder')}
 				>
 					<FolderPlus className="w-4 h-4" />
 				</button>
@@ -42,6 +44,7 @@ export default function FileExplorerActions({
 					onClick={() => zipInputRef.current?.click()}
 					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
 					title={t('files.importProject')}
+					aria-label={t('files.importProject')}
 				>
 					<Upload className="w-4 h-4" />
 				</button>
@@ -49,6 +52,7 @@ export default function FileExplorerActions({
 					onClick={onExportProject}
 					className="flex-1 flex items-center justify-center p-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
 					title={t('files.exportProject')}
+					aria-label={t('files.exportProject')}
 				>
 					<Download className="w-4 h-4" />
 				</button>

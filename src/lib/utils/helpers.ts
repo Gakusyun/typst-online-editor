@@ -33,23 +33,32 @@ export function debounce<Args extends unknown[], R>(
 }
 
 /**
+ * Hands a URL to the browser downloader. The anchor must be in the document for the
+ * click to count, and the URL must outlive the click: revoking it synchronously makes
+ * Firefox and Safari drop large downloads before they start.
+ */
+function triggerDownload(url: string, filename: string, cleanup?: () => void): void {
+	const a = document.createElement('a')
+	a.href = url
+	a.download = filename
+	document.body.appendChild(a)
+	a.click()
+	a.remove()
+	// Release the URL on a later macrotask, once the download has been handed off.
+	if (cleanup) setTimeout(cleanup, 0)
+}
+
+/**
  * Download a blob as a file
  */
 export function downloadBlob(blob: Blob, filename: string): void {
 	const url = URL.createObjectURL(blob)
-	const a = document.createElement('a')
-	a.href = url
-	a.download = filename
-	a.click()
-	URL.revokeObjectURL(url)
+	triggerDownload(url, filename, () => URL.revokeObjectURL(url))
 }
 
 /**
  * Download a PDF from a URL
  */
 export function downloadPdfFromUrl(url: string, filename: string = 'document.pdf'): void {
-	const a = document.createElement('a')
-	a.href = url
-	a.download = filename
-	a.click()
+	triggerDownload(url, filename)
 }

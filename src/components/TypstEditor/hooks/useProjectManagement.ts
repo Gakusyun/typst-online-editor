@@ -19,6 +19,7 @@ export function useProjectManagement(onProjectChange?: (files: Record<string, st
 		loadProject,
 		saveProject,
 		renameProject,
+		storageError,
 	} = useProjectState(onProjectChange)
 
 	// File operations
@@ -32,19 +33,19 @@ export function useProjectManagement(onProjectChange?: (files: Record<string, st
 	const handleProjectImport = async (file: File) => {
 		try {
 			const archive = new Uint8Array(await file.arrayBuffer())
-			loadProject(zipToProject(archive, file.name))
+			loadProject(
+				await zipToProject(archive, { archiveName: file.name, fallbackName: t('files.importedProjectName') })
+			)
 		} catch (error) {
 			console.error('Failed to import project:', error)
 			alert(t('dialog.importFailed', { error: error instanceof Error ? error.message : String(error) }))
 		}
 	}
 
-	const handleProjectExport = () => {
+	const handleProjectExport = async () => {
 		try {
-			const archive = projectToZip(currentProject)
-			// fflate types its output as Uint8Array<ArrayBufferLike>, but zipSync
-			// always allocates a plain ArrayBuffer.
-			downloadBlob(new Blob([archive as unknown as BlobPart]), projectZipName(currentProject))
+			const archive = await projectToZip(currentProject)
+			downloadBlob(new Blob([archive]), projectZipName(currentProject))
 		} catch (error) {
 			console.error('Failed to export project:', error)
 			alert(t('dialog.exportFailed', { error: error instanceof Error ? error.message : String(error) }))
@@ -56,6 +57,7 @@ export function useProjectManagement(onProjectChange?: (files: Record<string, st
 		activeFilePath,
 		loadProject,
 		renameProject,
+		storageError,
 		handleProjectImport,
 		handleProjectExport,
 		...fileOperations,

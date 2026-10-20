@@ -46,8 +46,9 @@ export default function FileExplorerHeader({ project, onRenameProject, onToggleC
 						<h2 className="text-sm font-semibold text-gray-200 truncate">{project.name}</h2>
 						<button
 							onClick={startRename}
-							className="p-1 rounded opacity-0 group-hover/name:opacity-100 hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-opacity"
+							className="p-1 rounded opacity-0 group-hover/name:opacity-100 focus-within:opacity-100 hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-opacity"
 							title={t('files.renameProject')}
+							aria-label={t('files.renameProject')}
 						>
 							<Edit2 className="w-3 h-3" />
 						</button>
@@ -59,6 +60,7 @@ export default function FileExplorerHeader({ project, onRenameProject, onToggleC
 				onClick={onToggleCollapse}
 				className="p-1 hover:bg-gray-800 rounded text-gray-400 hover:text-gray-200 transition-colors"
 				title={t('files.hide')}
+				aria-label={t('files.hide')}
 			>
 				<PanelLeftClose className="w-4 h-4" />
 			</button>

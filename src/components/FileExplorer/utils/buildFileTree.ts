@@ -56,3 +56,20 @@ export function buildFileTree(project: Project): FileNode[] {
 
 	return root
 }
+
+/**
+ * The rows a user can actually see, in render order: the tree with the
+ * collapsed subtrees dropped. Keyboard navigation walks this list, so focus
+ * moves only between rows that are on screen.
+ */
+export function flattenFileTree(nodes: FileNode[], expandedFolders: Set<string>): FileNode[] {
+	const rows: FileNode[] = []
+	const visit = (list: FileNode[]) => {
+		for (const node of list) {
+			rows.push(node)
+			if (node.isFolder && node.children && expandedFolders.has(node.path)) visit(node.children)
+		}
+	}
+	visit(nodes)
+	return rows
+}

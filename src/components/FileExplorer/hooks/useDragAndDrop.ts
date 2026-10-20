@@ -1,13 +1,16 @@
 import type { TargetedDragEvent } from 'preact'
 import { useState } from 'preact/hooks'
+import { fileNameOf, isDescendantPath, isProtectedPath, joinPath, parentPathOf } from '../utils/paths'
 
 export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) => void) {
 	const [draggedItem, setDraggedItem] = useState<string | null>(null)
+	// The hovered row, not the destination folder: a file row has to light up as
+	// the drop target too, and it resolves to its own folder only on drop.
 	const [dropTarget, setDropTarget] = useState<string | null>(null)
 
 	const handleDragStart = (path: string, e: TargetedDragEvent<HTMLElement>) => {
-		// Don't allow dragging main.typ
-		if (path === 'main.typ') {
+		// main.typ and the .gitkeep placeholders are not movable.
+		if (isProtectedPath(path)) {
 			e.preventDefault()
 			return
 		}
@@ -20,40 +23,26 @@ export function useDragAndDrop(onFileMove: (oldPath: string, newPath: string) =>
 		setDropTarget(null)
 	}
 
-	const handleDragOver = (path: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
+	const handleDragOver = (rowPath: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
 
-		if (!draggedItem || draggedItem === path) return
+		if (!draggedItem || draggedItem === rowPath) return
+		// A file row stands for its own folder — the destination the drop resolves to.
+		if (isDescendantPath(isFolder ? rowPath : parentPathOf(rowPath), draggedItem)) return
 
-		// Only allow dropping on folders
-		if (isFolder) {
-			setDropTarget(path)
-		} else {
-			// Allow dropping on root
-			setDropTarget('')
-		}
+		setDropTarget(rowPath)
 	}
 
-	const handleDrop = (targetPath: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
+	const handleDrop = (rowPath: string, isFolder: boolean, e: TargetedDragEvent<HTMLElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
 
-		if (!draggedItem) return
-
-		const fileName = draggedItem.split('/').pop()
-		let newPath: string
-
-		if (isFolder) {
-			// Drop into folder
-			newPath = `${targetPath}/${fileName}`
-		} else {
-			// Drop at root
-			newPath = fileName || draggedItem
-		}
-
-		if (newPath !== draggedItem) {
-			onFileMove(draggedItem, newPath)
+		if (draggedItem) {
+			const newPath = joinPath(isFolder ? rowPath : parentPathOf(rowPath), fileNameOf(draggedItem))
+			if (newPath !== draggedItem && !isDescendantPath(newPath, draggedItem)) {
+				onFileMove(draggedItem, newPath)
+			}
 		}
 
 		setDraggedItem(null)

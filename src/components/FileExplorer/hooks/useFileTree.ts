@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks'
 
 export function useFileTree() {
-	const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']))
+	// Folders start collapsed; nothing is expanded until the user opens a folder.
+	const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
 	const toggleFolder = (path: string) => {
 		setExpandedFolders(prev => {

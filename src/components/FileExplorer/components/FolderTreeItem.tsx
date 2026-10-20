@@ -1,8 +1,9 @@
-import type { ComponentChildren, TargetedDragEvent } from 'preact'
+import type { ComponentChildren, TargetedDragEvent, TargetedKeyboardEvent } from 'preact'
 import { Folder, ChevronRight, ChevronDown, Edit2, Trash2 } from 'lucide-preact'
 import RenameInput from './RenameInput'
 import { useI18n } from '@/lib/i18n/useI18n'
 import type { FileNode } from '../types'
+import { fileNameOf } from '../utils/paths'
 
 interface FolderTreeItemProps {
 	node: FileNode
@@ -11,9 +12,12 @@ interface FolderTreeItemProps {
 	isRenaming: boolean
 	isDropTarget: boolean
 	isSelected: boolean
+	isFocused: boolean
 	renameValue: string
 	onToggle: () => void
 	onSelect: () => void
+	onFocus: () => void
+	onKeyDown: (e: TargetedKeyboardEvent<HTMLDivElement>) => void
 	onStartRename: () => void
 	onRename: () => void
 	onCancelRename: () => void
@@ -32,9 +36,12 @@ export default function FolderTreeItem({
 	isRenaming,
 	isDropTarget,
 	isSelected,
+	isFocused,
 	renameValue,
 	onToggle,
 	onSelect,
+	onFocus,
+	onKeyDown,
 	onStartRename,
 	onRename,
 	onCancelRename,
@@ -46,11 +53,11 @@ export default function FolderTreeItem({
 	children,
 }: FolderTreeItemProps) {
 	const { t } = useI18n()
-	const folderName = node.path.split('/').pop() || node.path
+	const folderName = fileNameOf(node.path)
 
 	if (isRenaming) {
 		return (
-			<div>
+			<div role="presentation">
 				<div className="px-4 py-2 bg-gray-800" style={{ paddingLeft: `${depth * 12 + 16}px` }}>
 					<div className="flex items-center gap-2">
 						<Folder className="w-4 h-4 text-blue-400 shrink-0" />
@@ -63,8 +70,13 @@ export default function FolderTreeItem({
 	}
 
 	return (
-		<div>
+		<div role="presentation">
 			<div
+				role="treeitem"
+				aria-expanded={isExpanded}
+				aria-selected={isSelected}
+				tabIndex={isFocused ? 0 : -1}
+				data-tree-path={node.path}
 				className={`group flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-700 transition-colors ${
 					isDropTarget ? 'bg-gray-700 border-l-2 border-blue-500' : ''
 				} ${isSelected ? 'bg-gray-700' : ''}`}
@@ -73,10 +85,13 @@ export default function FolderTreeItem({
 					onToggle()
 					onSelect()
 				}}
+				onFocus={onFocus}
+				onKeyDown={onKeyDown}
 				onDragOver={(e) => {
 					if (e.dataTransfer?.types.includes('Files')) {
+						// Not stopped: the panel's own dragover keeps the drop hint
+						// alive while the pointer sits on a row.
 						e.preventDefault()
-						e.stopPropagation()
 						e.dataTransfer.dropEffect = 'copy'
 					} else {
 						onDragOver(e)
@@ -99,7 +114,9 @@ export default function FolderTreeItem({
 					<Folder className="w-4 h-4 text-gray-400 shrink-0" />
 					<span className="text-sm text-gray-300 truncate" title={folderName}>{folderName}</span>
 				</div>
-				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+				{/* `invisible` instead of `opacity-0`: the buttons leave the tab order
+				    until the row is hovered or focused. */}
+				<div className="flex items-center gap-1 invisible group-hover:visible group-focus-within:visible transition-opacity">
 					<button
 						onClick={(e) => {
 							e.stopPropagation()
@@ -107,6 +124,7 @@ export default function FolderTreeItem({
 						}}
 						className="p-1 hover:bg-gray-600 rounded"
 						title={t('files.renameFolder')}
+						aria-label={t('files.renameFolder')}
 					>
 						<Edit2 className="w-3 h-3 text-gray-300" />
 					</button>
@@ -117,12 +135,13 @@ export default function FolderTreeItem({
 						}}
 						className="p-1 hover:bg-red-900/50 rounded"
 						title={t('files.deleteFolder')}
+						aria-label={t('files.deleteFolder')}
 					>
 						<Trash2 className="w-3 h-3 text-red-400" />
 					</button>
 				</div>
 			</div>
-			{children}
+			{children && <div role="group">{children}</div>}
 		</div>
 	)
 }

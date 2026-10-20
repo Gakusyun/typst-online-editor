@@ -44,6 +44,7 @@ export default function CreateItemInput({
 					onClick={onConfirm}
 					className="p-1 hover:bg-gray-700 rounded"
 					title={t('files.create')}
+					aria-label={t('files.create')}
 				>
 					<Check className="w-3 h-3 text-green-400" />
 				</button>
@@ -51,6 +52,7 @@ export default function CreateItemInput({
 					onClick={onCancel}
 					className="p-1 hover:bg-gray-700 rounded"
 					title={t('files.cancel')}
+					aria-label={t('files.cancel')}
 				>
 					<X className="w-3 h-3 text-red-400" />
 				</button>

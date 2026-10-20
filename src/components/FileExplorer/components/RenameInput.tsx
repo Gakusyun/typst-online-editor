@@ -36,10 +36,10 @@ export default function RenameInput({
 				className={inputClassName}
 				autoFocus
 			/>
-			<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.rename')}>
+			<button onClick={onRename} className="p-1 hover:bg-gray-700 rounded" title={t('files.rename')} aria-label={t('files.rename')}>
 				<Check className="w-3 h-3 text-green-400" />
 			</button>
-			<button onClick={onCancel} className="p-1 hover:bg-gray-700 rounded" title={t('files.cancel')}>
+			<button onClick={onCancel} className="p-1 hover:bg-gray-700 rounded" title={t('files.cancel')} aria-label={t('files.cancel')}>
 				<X className="w-3 h-3 text-red-400" />
 			</button>
 		</>
