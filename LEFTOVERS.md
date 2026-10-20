@@ -58,6 +58,12 @@
 - **要做什么**（可选）：改为内存 + 每次会话输入，或用 Web Crypto 以口令派生密钥加密后落盘；无论哪种都要保留「忘记密钥」，并更新 `README.md` 的 AI 章节。
 - **验收**：刷新后不会把明文 key 暴露给任何脚本（或明确告知用户取舍）。
 
+### 10. pdf.js worker 加载失败时，预览是静默的（已实测）
+- **现状**：worker 从 CDN 加载失败（断网、镜像挂了、被拦截）时，pdf.js 退回 fake worker 并再次失败，画布停在未渲染状态（300×150），页面上**没有任何提示**——只在控制台留一句 `Setting up fake worker failed: "Failed to fetch dynamically imported module: https://registry.npmmirror.com/pdfjs-dist/<ver>/files/build/pdf.worker.min.mjs"`。`usePdfRenderer` 的 `loadError` 只覆盖 `getDocument()` 的失败，不覆盖 worker 起不来这一层。
+- **要做什么**：把 pdf.js worker 初始化失败也送进现有的错误通道（`PdfPlaceholder` 的 `errorMsg ?? loadError`），文案走 i18n（例如「预览引擎加载失败：请检查网络 / CDN 是否可达」）；`pdfjs.ts` 的 `getPdfjs()` 可以把 worker 创建失败包装成可识别的错误类型。
+- **验收**：拦截 `**/*pdf.worker*`（或断网）后刷新，预览区显示可读的错误与重试建议，而不是空白页；恢复网络后重新编译能正常渲染。
+- **实测方法**（可复现）：`playwright-cli route "**/*pdf.worker*" --status=404` → 刷新 → 观察预览区与 `document.body.innerText`。
+
 ---
 
 ## 已决策 / 已知限制（不必改，供新 session 参考）
@@ -66,8 +72,9 @@
 - **被替换的编译器实例无法释放**：见待办 1，属于上游 API 缺口。
 - **typst.ts 只在编译失败时给 diagnostics**：成功编译会丢弃警告，因此「成功但有警告」无法在 UI 上呈现（协议里只保留失败分支的 `diagnostics`）。需要上游 API 才能解决。
 - **依赖锁定**：`@myriaddreamin/*` 精确锁版本（`package.json`），`typst.worker.ts` 的 wasm URL 手写同一版本——升级必须同时改两处，否则运行期报 `wasm.__wasm_bindgen_func_elem_N is not a function`。CDN 钉版清单见 `AGENTS.md` 的 Known Quirks（含 `noto-cjk@Sans2.004`、`noto-emoji@v2.047`、`shiki-tinymist@0.1.0`）。
-- **构建告警**：`wasm-pack-shim` 的 deprecated parameters 控制台警告来自 typst.ts 自身，无法在本仓库消除。
+- **pdf.js worker 走 CDN**（已决策并已实测）：happy path 渲染正常（canvas 586）；拦截 `**/*pdf.worker*` 后渲染不发生（canvas 停在 300），控制台报 `Failed to fetch dynamically imported module: …registry.npmmirror.com/…pdf.worker.min.mjs` —— 证明 CDN 就是实际代码路径（worker 发起的 fetch 不出现在页面的 resource timeline 里，所以别用 `performance.getEntriesByType('resource')` 判断）。副作用见待办 10：该失败目前在 UI 上是静默的。
 - **`FileExplorer` 的 `onFilesCreate` 是可选 prop**：不传时回退到逐个 `onFileCreate`（仍然写 N 次）；`TypstEditor` 两处调用点都已接线。
+- **构建告警**：`wasm-pack-shim` 的 deprecated parameters 控制台警告来自 typst.ts 自身，无法在本仓库消除。
 
 ## 完成方式
 
