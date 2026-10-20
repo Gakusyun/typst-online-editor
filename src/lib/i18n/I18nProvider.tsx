@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { safeGet, safeSet } from '@/lib/storage/safeStorage'
 import {
 	LANGS,
 	LANG_STORAGE_KEY,
@@ -21,8 +22,29 @@ function isLangSetting(value: string | null): value is LangSetting {
 
 /** Saved choice wins; a fresh install follows the system language. */
 function readLangSetting(): LangSetting {
-	const saved = localStorage.getItem(LANG_STORAGE_KEY)
+	const saved = safeGet(LANG_STORAGE_KEY)
 	return isLangSetting(saved) ? saved : 'system'
+}
+
+/**
+ * The language the browser prefers, re-read whenever the browser's language
+ * changes — so "follow system" reacts without a reload. `languagechange` does
+ * not fire on this page in every browser, but the listener is cheap and the
+ * `enabled` dependency re-resolves the language as soon as the setting flips
+ * back to `system`.
+ */
+function useSystemLang(enabled: boolean): Lang {
+	const [systemLang, setSystemLang] = useState<Lang>(browserLang)
+
+	useEffect(() => {
+		if (!enabled) return
+		const onLanguageChange = () => setSystemLang(browserLang())
+		onLanguageChange()
+		window.addEventListener('languagechange', onLanguageChange)
+		return () => window.removeEventListener('languagechange', onLanguageChange)
+	}, [enabled])
+
+	return systemLang
 }
 
 interface I18nProviderProps {
@@ -31,11 +53,13 @@ interface I18nProviderProps {
 
 export default function I18nProvider({ children }: I18nProviderProps) {
 	const [langSetting, setLangSetting] = useState<LangSetting>(readLangSetting)
-	const lang = langSetting === 'system' ? browserLang() : langSetting
+	const systemLang = useSystemLang(langSetting === 'system')
+	const lang = langSetting === 'system' ? systemLang : langSetting
 
 	useEffect(() => {
 		document.documentElement.lang = lang
-		localStorage.setItem(LANG_STORAGE_KEY, langSetting)
+		document.title = translate(lang, 'app.title')
+		safeSet(LANG_STORAGE_KEY, langSetting)
 	}, [lang, langSetting])
 
 	const i18n = useMemo<I18n>(

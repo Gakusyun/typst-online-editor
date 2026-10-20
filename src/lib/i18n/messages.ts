@@ -11,6 +11,11 @@
  */
 
 export const en = {
+	// Document title — written to `document.title` by I18nProvider so the tab follows the UI language.
+	'app.title': 'Typst Online',
+	'app.errorTitle': 'Something went wrong',
+	'app.errorReload': 'Reload',
+
 	// Compile status — shown in the header badge and the preview placeholder.
 	'status.compiling': 'Compiling...',
 	'status.initializing': 'Initializing compiler...',
@@ -67,6 +72,7 @@ export const en = {
 	'settings.aiApiKeyHint': 'Kept in this browser only (localStorage) and sent to no one but the configured endpoint, as its Authorization header. Leave empty for local servers that need no key.',
 	'settings.aiShowKey': 'Show',
 	'settings.aiHideKey': 'Hide',
+	'settings.aiClearKey': 'Forget key',
 	'settings.aiModel': 'Model',
 	'settings.aiModelHint': 'A model id that endpoint accepts, e.g. gpt-4o-mini or deepseek-chat.',
 	'settings.aiModelPlaceholder': 'gpt-4o-mini',
@@ -81,7 +87,8 @@ export const en = {
 	'ai.clear': 'Clear conversation',
 	'ai.notConfigured': 'No AI service configured yet. Set the endpoint and model in Settings → AI.',
 	'ai.openSettings': 'Open Settings',
-	'ai.fileLabel': 'File',
+	'ai.fileLabel': 'File: ',
+	'ai.binaryFileHint': 'This file is a binary asset and cannot be edited by the assistant.',
 	'ai.selectionCount': '{count} characters selected',
 	'ai.selectionCount_one': '{count} character selected',
 	'ai.selectionEmpty': 'nothing selected',
@@ -97,6 +104,7 @@ export const en = {
 	'ai.applyDocument': 'Apply to whole file',
 	'ai.applySelection': 'Apply to selection',
 	'ai.applyStaleFile': 'The active file changed since this reply — open {path} and send the request again.',
+	'ai.applyStaleSelection': 'The document changed since the request; the reply was not applied.',
 	'ai.copy': 'Copy',
 	'ai.copied': 'Copied',
 	'ai.privacyHint': 'Requests go straight from this browser to your endpoint; the key stays in local storage and the document is never sent anywhere else.',
@@ -146,9 +154,17 @@ export const en = {
 	'files.deleteFolder': 'Delete folder',
 	'files.dropToUpload': 'Drop files to upload',
 	'files.supported': 'Supported: {extensions}',
+	'files.invalidName': 'Invalid name. Avoid "/", "." and leading or trailing dots or spaces.',
+	'files.unsupportedType': 'Unsupported file type: {name}',
+	'files.uploadFailed': 'Could not add {name}: {error}',
+	'files.storageFailed':
+		'Could not save to browser storage — the last changes may be lost when the page is reloaded.',
 	'files.renameProject': 'Rename project',
 	'files.importProject': 'Import Project',
 	'files.exportProject': 'Export Project',
+	// Names a project created from scratch, or restored from a zip, gets.
+	'files.defaultProjectName': 'Untitled Document',
+	'files.importedProjectName': 'Imported Project',
 
 	// Modal dialogs (alert / confirm)
 	'dialog.fileExists': 'A file with this name already exists!',
@@ -164,10 +180,28 @@ export const en = {
 
 export type MessageKey = keyof typeof en
 
-/** A complete locale: every `MessageKey` must be present. */
-export type Messages = Record<MessageKey, string>
+/** The CLDR plural categories `Intl.PluralRules` can return. */
+type PluralCategory = 'zero' | 'one' | 'two' | 'few' | 'many' | 'other'
+
+/** A `<key>_<plural category>` variant, e.g. `files.count_one`. */
+type PluralKey = Extract<MessageKey, `${string}_${PluralCategory}`>
+
+/**
+ * A complete locale: every base key is required and misspellings are rejected,
+ * while plural variants stay optional because a locale only declares the
+ * categories its own plural rules can select — `Intl.PluralRules('zh')` never
+ * returns `one`, so `zh` carries no `*_one` variant.
+ */
+export type Messages = Partial<Record<PluralKey, string>> & {
+	[K in MessageKey as K extends PluralKey ? never : K]: string
+}
 
 export const zh: Messages = {
+	// Document title — written to `document.title` by I18nProvider so the tab follows the UI language.
+	'app.title': 'Typst 在线编辑器',
+	'app.errorTitle': '出错了',
+	'app.errorReload': '重新加载',
+
 	// Compile status
 	'status.compiling': '编译中…',
 	'status.initializing': '正在初始化编译器…',
@@ -203,7 +237,6 @@ export const zh: Messages = {
 	'settings.loadSystemFonts': '读取系统字体',
 	'settings.fontsLoading': '正在读取系统字体…',
 	'settings.fontsLoaded': '已读取 {count} 个字体族',
-	'settings.fontsLoaded_one': '已读取 {count} 个字体族',
 	'settings.fontsDenied': '系统字体访问被拒绝',
 	'settings.fontsFailed': '读取系统字体失败',
 	'settings.fontFamilyHint': '需与已安装字体的名称一致（例如“JetBrains Mono”）；留空使用默认字体。编辑器字体同时用于编译报错信息。',
@@ -224,6 +257,7 @@ export const zh: Messages = {
 	'settings.aiApiKeyHint': '只保存在本地浏览器（localStorage），仅在请求该接口时作为 Authorization 头发送，不会上传到本项目。本地服务可不填。',
 	'settings.aiShowKey': '显示',
 	'settings.aiHideKey': '隐藏',
+	'settings.aiClearKey': '清除密钥',
 	'settings.aiModel': '模型',
 	'settings.aiModelHint': '该接口接受的模型名，例如 gpt-4o-mini、deepseek-chat。',
 	'settings.aiModelPlaceholder': 'gpt-4o-mini',
@@ -238,9 +272,9 @@ export const zh: Messages = {
 	'ai.clear': '清空对话',
 	'ai.notConfigured': '尚未配置 AI 服务：请在「设置 → AI」中填写接口地址与模型。',
 	'ai.openSettings': '打开设置',
-	'ai.fileLabel': '文件',
+	'ai.fileLabel': '文件：',
+	'ai.binaryFileHint': '当前文件是二进制资源，无法由助手编辑。',
 	'ai.selectionCount': '已选中 {count} 个字符',
-	'ai.selectionCount_one': '已选中 {count} 个字符',
 	'ai.selectionEmpty': '未选中内容',
 	'ai.scope': '改写范围',
 	'ai.scopeSelection': '选中片段',
@@ -254,6 +288,7 @@ export const zh: Messages = {
 	'ai.applyDocument': '应用到整个文件',
 	'ai.applySelection': '应用到选中片段',
 	'ai.applyStaleFile': '当前文件已切换：请先打开 {path} 再重新发送。',
+	'ai.applyStaleSelection': '请求发出后文档已修改，回复未应用。',
 	'ai.copy': '复制',
 	'ai.copied': '已复制',
 	'ai.privacyHint': '请求由浏览器直接发往你填写的接口；密钥只保存在本地，文档不会发往其它地方。',
@@ -287,7 +322,6 @@ export const zh: Messages = {
 
 	// File explorer
 	'files.count': '{count} 个文件',
-	'files.count_one': '{count} 个文件',
 	'files.show': '显示文件列表',
 	'files.hide': '隐藏文件列表',
 	'files.newFile': '新建文件',
@@ -303,9 +337,16 @@ export const zh: Messages = {
 	'files.deleteFolder': '删除文件夹',
 	'files.dropToUpload': '拖放文件以上传',
 	'files.supported': '支持：{extensions}',
+	'files.invalidName': '名称无效：不能包含“/”，也不能以点或空格开头或结尾。',
+	'files.unsupportedType': '不支持的文件类型：{name}',
+	'files.uploadFailed': '无法添加 {name}：{error}',
+	'files.storageFailed': '无法保存到浏览器存储 —— 刷新页面后最近的修改可能会丢失。',
 	'files.renameProject': '重命名项目',
 	'files.importProject': '导入项目',
 	'files.exportProject': '导出项目',
+	// Names a project created from scratch, or restored from a zip, gets.
+	'files.defaultProjectName': '未命名文档',
+	'files.importedProjectName': '导入的项目',
 
 	// Modal dialogs
 	'dialog.fileExists': '同名文件已存在！',
@@ -320,6 +361,11 @@ export const zh: Messages = {
 }
 
 export const de: Messages = {
+	// Document title — written to `document.title` by I18nProvider so the tab follows the UI language.
+	'app.title': 'Typst Online',
+	'app.errorTitle': 'Etwas ist schiefgelaufen',
+	'app.errorReload': 'Neu laden',
+
 	// Compile status
 	'status.compiling': 'Wird kompiliert …',
 	'status.initializing': 'Compiler wird initialisiert …',
@@ -376,6 +422,7 @@ export const de: Messages = {
 	'settings.aiApiKeyHint': 'Wird nur in diesem Browser gespeichert (localStorage) und ausschließlich als Authorization-Header an den konfigurierten Endpunkt gesendet. Für lokale Server ohne Key leer lassen.',
 	'settings.aiShowKey': 'Anzeigen',
 	'settings.aiHideKey': 'Verbergen',
+	'settings.aiClearKey': 'Schlüssel löschen',
 	'settings.aiModel': 'Modell',
 	'settings.aiModelHint': 'Eine Modell-ID, die der Endpunkt akzeptiert, z. B. gpt-4o-mini oder deepseek-chat.',
 	'settings.aiModelPlaceholder': 'gpt-4o-mini',
@@ -390,7 +437,8 @@ export const de: Messages = {
 	'ai.clear': 'Unterhaltung leeren',
 	'ai.notConfigured': 'Noch kein KI-Dienst konfiguriert: Endpunkt und Modell unter Einstellungen → KI eintragen.',
 	'ai.openSettings': 'Einstellungen öffnen',
-	'ai.fileLabel': 'Datei',
+	'ai.fileLabel': 'Datei: ',
+	'ai.binaryFileHint': 'Diese Datei ist ein Binär-Asset und kann nicht vom Assistenten bearbeitet werden.',
 	'ai.selectionCount': '{count} Zeichen ausgewählt',
 	'ai.selectionCount_one': '{count} Zeichen ausgewählt',
 	'ai.selectionEmpty': 'nichts ausgewählt',
@@ -406,6 +454,7 @@ export const de: Messages = {
 	'ai.applyDocument': 'Auf ganze Datei anwenden',
 	'ai.applySelection': 'Auf Auswahl anwenden',
 	'ai.applyStaleFile': 'Die aktive Datei hat gewechselt — {path} öffnen und erneut senden.',
+	'ai.applyStaleSelection': 'Das Dokument wurde seit der Anfrage geändert; die Antwort wurde nicht eingefügt.',
 	'ai.copy': 'Kopieren',
 	'ai.copied': 'Kopiert',
 	'ai.privacyHint': 'Anfragen gehen direkt aus diesem Browser an Ihren Endpunkt; der Key bleibt lokal gespeichert und das Dokument wird nirgendwo sonst hin gesendet.',
@@ -455,9 +504,17 @@ export const de: Messages = {
 	'files.deleteFolder': 'Ordner löschen',
 	'files.dropToUpload': 'Dateien zum Hochladen ablegen',
 	'files.supported': 'Unterstützt: {extensions}',
+	'files.invalidName': 'Ungültiger Name: kein „/“, kein Punkt und kein Leerzeichen am Anfang oder Ende.',
+	'files.unsupportedType': 'Nicht unterstützter Dateityp: {name}',
+	'files.uploadFailed': '{name} konnte nicht hinzugefügt werden: {error}',
+	'files.storageFailed':
+		'Speichern im Browserspeicher fehlgeschlagen — die letzten Änderungen können beim Neuladen verloren gehen.',
 	'files.renameProject': 'Projekt umbenennen',
 	'files.importProject': 'Projekt importieren',
 	'files.exportProject': 'Projekt exportieren',
+	// Names a project created from scratch, or restored from a zip, gets.
+	'files.defaultProjectName': 'Unbenanntes Dokument',
+	'files.importedProjectName': 'Importiertes Projekt',
 
 	// Modal dialogs
 	'dialog.fileExists': 'Eine Datei mit diesem Namen existiert bereits!',

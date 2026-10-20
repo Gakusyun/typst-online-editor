@@ -1,4 +1,4 @@
-import { MESSAGES, type MessageKey, type Messages } from './messages'
+import { MESSAGES, type MessageKey } from './messages'
 
 export type { MessageKey, Messages } from './messages'
 
@@ -40,10 +40,22 @@ export const LANG_LABELS: Record<Lang, string> = {
 /** Where the language choice is persisted; `system` follows the browser. */
 export const LANG_STORAGE_KEY = 'typst-lang'
 
-/** The browser language mapped onto a supported language. */
+/**
+ * The browser language mapped onto a supported language.
+ *
+ * `navigator.languages` is the user's ordered preference list, so a browser set
+ * to `['fr-FR', 'de']` still gets German instead of the English fallback.
+ * Matches on the primary subtag so regional and script variants resolve too
+ * (`de-AT` → `de`, `zh-Hans` / `zh-Hant` → `zh`).
+ */
 export function browserLang(): Lang {
-	const preferred = navigator.language.toLowerCase()
-	return LANGS.find((lang) => preferred.startsWith(lang)) ?? 'en'
+	const preferred = navigator.languages?.length ? navigator.languages : [navigator.language]
+	for (const tag of preferred) {
+		const primary = tag.toLowerCase().split('-')[0]
+		const match = LANGS.find((lang) => lang === primary)
+		if (match) return match
+	}
+	return 'en'
 }
 
 /** Values for the `{placeholder}` slots of a message. */
@@ -81,12 +93,13 @@ function pluralCategory(lang: Lang, count: number): string {
 
 /** Resolve `key` in `lang`. See {@link I18n.t} for the plural rules. */
 export function translate(lang: Lang, key: MessageKey, vars?: MessageVars): string {
-	const catalog: Messages = MESSAGES[lang]
+	// Viewed loosely: the plural variant is optional per locale, and a base key
+	// missing from a catalog still renders as its own name instead of crashing.
+	const catalog: Record<string, string | undefined> = MESSAGES[lang]
 	const count = vars?.count
-	const template =
-		typeof count === 'number'
-			? (catalog[`${key}_${pluralCategory(lang, count)}` as MessageKey] ?? catalog[key])
-			: catalog[key]
+	const variant =
+		typeof count === 'number' ? catalog[`${key}_${pluralCategory(lang, count)}`] : undefined
+	const template = variant ?? catalog[key] ?? key
 
 	if (!vars) return template
 	return template.replace(/\{(\w+)\}/g, (slot, name: string) =>
