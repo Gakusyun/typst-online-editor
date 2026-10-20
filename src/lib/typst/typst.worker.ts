@@ -8,35 +8,8 @@ import {
 	MemoryAccessModel
 } from '@myriaddreamin/typst.ts';
 import { withPackageRegistry, withAccessModel } from '@myriaddreamin/typst.ts/options.init';
-import { CORE_FONTS, EMOJI_FONTS, CJK_FONTS } from './fonts';
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-type CompileRequest = {
-	type: 'compile';
-	id: string;
-	files: Record<string, string>; // Map of file path to content
-	mainFile: string; // Which file to compile
-	images?: Record<string, Uint8Array<ArrayBuffer>>;
-};
-
-type CompileResponse =
-	| {
-			type: 'compile-result';
-			id: string;
-			ok: true;
-			pdf: ArrayBuffer;
-			diagnostics: string[];
-	  }
-	| {
-			type: 'compile-result';
-			id: string;
-			ok: false;
-			error: string;
-			diagnostics: string[];
-	  };
+import { CORE_FONTS, EMOJI_FONTS, CJK_FONTS, fontUrls } from './fonts';
+import type { CompileImages, CompileRequest, CompileResponse } from './protocol';
 
 // ============================================================================
 // Configuration
@@ -44,7 +17,8 @@ type CompileResponse =
 
 // The compiler wasm loads from a CDN mirror — nothing is self-hosted in public/,
 // so compiling needs network access. Keep the pinned version in sync with the
-// installed @myriaddreamin/* packages. Fonts: see ./fonts.
+// installed @myriaddreamin/* packages (they are pinned exactly in package.json
+// for that reason). Fonts: see ./fonts.
 const TYPST_WASM_URL = 'https://cdn.jsdmirror.com/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm';
 
 // ============================================================================
@@ -57,9 +31,20 @@ let compilerPromise: Promise<TypstCompiler> | null = null;
 let compileQueue: Promise<void> = Promise.resolve();
 let emojiLoaded = false;
 let cjkLoaded = false;
+/** When the last compile *finished*; what the idle timeout is measured from. */
 let lastCompileTime = Date.now();
 let fontsNeedRebuild = false; // set when a dropped compiler's fonts must come back
 const loadedCustomFonts: Set<string> = new Set(); // Track custom font files
+/**
+ * The newest request the worker has been asked for. A queued job that a later
+ * request superseded is answered without compiling: its document would never be
+ * rendered anyway.
+ */
+let latestRequestId: string | null = null;
+/** Paths already handed to the current compiler, so a compile only sends the diffs. */
+let sourcedFiles = new Map<string, string>();
+/** Shadowed binaries, keyed by path: the version the wasm heap already holds. */
+let shadowedBinaries = new Map<string, number>();
 
 // Package registry for Typst Universe packages (mitex, cetz, fletcher, etc.)
 const accessModel = new MemoryAccessModel();
@@ -83,6 +68,24 @@ const fetchCdn: typeof fetch = async (input, init) => {
 };
 
 /**
+ * The compiler wasm bytes, fetched once per worker. Every compiler rebuild used
+ * to fetch and re-read the ~27 MB module from the CDN (`LazyWasmModule`'s memo
+ * is per instance), which is what made a font change expensive.
+ */
+let wasmBytesPromise: Promise<ArrayBuffer> | null = null;
+
+function getWasmBytes(): Promise<ArrayBuffer> {
+	wasmBytesPromise ??= fetchCdn(TYPST_WASM_URL)
+		.then((response) => response.arrayBuffer())
+		.catch((error) => {
+			// A transient CDN failure must not be cached: the next compile retries.
+			wasmBytesPromise = null;
+			throw error;
+		});
+	return wasmBytesPromise;
+}
+
+/**
  * A font for the compiler: a URL (CDN assets), or raw font data (project font
  * files) — `loadFonts` adds bytes directly, with no base64 detour.
  */
@@ -94,7 +97,7 @@ type CompilerFont = string | Uint8Array<ArrayBuffer>
 async function createCompilerWithFonts(fonts: CompilerFont[]): Promise<TypstCompiler> {
 	const compiler = createTypstCompiler();
 	await compiler.init({
-		getModule: async () => (await fetchCdn(TYPST_WASM_URL)).arrayBuffer(),
+		getModule: async () => await getWasmBytes(),
 		beforeBuild: [
 			// `assets: false` is required: with no options, TypstCompiler.init() appends a
 			// default font loader ({assets: ['text']}) that downloads typst's default font
@@ -108,10 +111,15 @@ async function createCompilerWithFonts(fonts: CompilerFont[]): Promise<TypstComp
 }
 
 /**
- * Detects if text requires emoji fonts
+ * Detects if text requires emoji fonts.
+ *
+ * The old pattern (`/[\uD800-\uDFFF]|…/`, no `u` flag) matched *any* surrogate
+ * code unit, i.e. every astral character: a single CJK extension-B ideograph or
+ * a mathematical alphanumeric triggered the ~9 MB Noto Color Emoji download and
+ * a full compiler rebuild.
  */
 function needsEmojiFont(text: string): boolean {
-	return /[\uD800-\uDFFF]|[\u2600-\u26FF]|[\u2700-\u27BF]/.test(text);
+	return /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(text);
 }
 
 /**
@@ -126,20 +134,25 @@ function needsCJKFont(text: string): boolean {
  * Gets the current font set based on loaded fonts
  */
 function getCurrentFonts(): string[] {
-	const fonts = [...CORE_FONTS];
-	if (emojiLoaded) fonts.push(...EMOJI_FONTS);
-	if (cjkLoaded) fonts.push(...CJK_FONTS);
+	const fonts = fontUrls(CORE_FONTS);
+	if (emojiLoaded) fonts.push(...fontUrls(EMOJI_FONTS));
+	if (cjkLoaded) fonts.push(...fontUrls(CJK_FONTS));
 	return fonts;
 }
 
 /**
  * Detects custom font files in the images/fonts collection
  */
-function detectCustomFonts(images: Record<string, Uint8Array<ArrayBuffer>>): string[] {
+function detectCustomFonts(images: CompileImages): string[] {
 	return Object.keys(images).filter(path => 
 		path.toLowerCase().endsWith('.ttf') || 
 		path.toLowerCase().endsWith('.otf')
 	);
+}
+
+/** Whether the compiler carries exactly `paths` as project fonts. */
+function carriesFonts(paths: string[]): boolean {
+	return paths.length === loadedCustomFonts.size && paths.every((path) => loadedCustomFonts.has(path));
 }
 
 // ============================================================================
@@ -149,24 +162,26 @@ function detectCustomFonts(images: Record<string, Uint8Array<ArrayBuffer>>): str
 /**
  * Upgrades compiler with emoji fonts (lazy loading)
  */
-async function upgradeCompilerWithEmoji(images: Record<string, Uint8Array<ArrayBuffer>>): Promise<void> {
+async function upgradeCompilerWithEmoji(images: CompileImages): Promise<void> {
 	if (emojiLoaded) return;
 
-	emojiLoaded = true;
 	console.log('[Typst] Upgrading compiler with emoji fonts...');
 	await rebuildCompilerWithFonts(images);
+	// Only after the rebuilt compiler exists: setting it first meant one failed
+	// CDN fetch left the emoji fonts missing for the worker's whole lifetime.
+	emojiLoaded = true;
 	console.log('[Typst] Emoji fonts loaded successfully');
 }
 
 /**
  * Upgrades compiler with CJK fonts (lazy loading)
  */
-async function upgradeCompilerWithCJK(images: Record<string, Uint8Array<ArrayBuffer>>): Promise<void> {
+async function upgradeCompilerWithCJK(images: CompileImages): Promise<void> {
 	if (cjkLoaded) return;
 
-	cjkLoaded = true;
 	console.log('[Typst] Upgrading compiler with CJK fonts...');
 	await rebuildCompilerWithFonts(images);
+	cjkLoaded = true;
 	console.log('[Typst] CJK fonts loaded successfully');
 }
 
@@ -177,27 +192,43 @@ function getCompiler(): Promise<TypstCompiler> {
 	// Check if compiler should be reset due to inactivity
 	if (compilerPromise && Date.now() - lastCompileTime > COMPILER_IDLE_TIMEOUT) {
 		console.log('[Typst] Resetting compiler after idle timeout');
-		compilerPromise = null;
-		emojiLoaded = false;
-		cjkLoaded = false;
-		loadedCustomFonts.clear();
-		fontsNeedRebuild = true;
+		dropCompiler();
 	}
 
 	if (compilerPromise) return compilerPromise;
 
 	console.log('[Typst] Initializing new compiler instance');
-	compilerPromise = createCompilerWithFonts(CORE_FONTS);
-	return compilerPromise;
+	const created = createCompilerWithFonts(fontUrls(CORE_FONTS)).catch((error) => {
+		// A rejected promise must not be cached: a single CDN hiccup used to make
+		// every later compile re-await the same rejection.
+		compilerPromise = null;
+		throw error;
+	});
+	compilerPromise = created;
+	return created;
+}
+
+/** Forgets the current compiler; the next compile builds a fresh one. */
+function dropCompiler(): void {
+	compilerPromise = null;
+	emojiLoaded = false;
+	cjkLoaded = false;
+	loadedCustomFonts.clear();
+	fontsNeedRebuild = true;
+	sourcedFiles = new Map();
+	shadowedBinaries = new Map();
 }
 
 /**
  * Rebuilds the compiler with every font it should carry: the CDN assets and the
  * project's own font files. Also re-applies them after the compiler was dropped.
+ *
+ * The replaced instance is dropped without a teardown — typst.ts exposes no
+ * `free()`/`dispose()` on a compiler driver (only `reset()`, which keeps the
+ * wasm instance) — so its wasm memory is reclaimed only once it is collected.
+ * [known limitation, documented in AGENTS.md]
  */
-async function rebuildCompilerWithFonts(
-	images: Record<string, Uint8Array<ArrayBuffer>>
-): Promise<void> {
+async function rebuildCompilerWithFonts(images: CompileImages): Promise<void> {
 	const customFontPaths = detectCustomFonts(images);
 	console.log('[Typst] Rebuilding compiler with', customFontPaths.length, 'project fonts');
 
@@ -207,24 +238,17 @@ async function rebuildCompilerWithFonts(
 	]);
 	compilerPromise = Promise.resolve(newCompiler);
 
+	// A different compiler instance starts with an empty virtual file system:
+	// whatever the previous one had been told has to be sent again.
+	sourcedFiles = new Map();
+	shadowedBinaries = new Map();
+
 	// Track loaded custom fonts
 	loadedCustomFonts.clear();
 	customFontPaths.forEach(path => loadedCustomFonts.add(path));
 	fontsNeedRebuild = false;
 
 	console.log('[Typst] Fonts loaded successfully');
-}
-
-/**
- * Manually reset compiler (useful for memory management)
- */
-function resetCompiler(): void {
-	console.log('[Typst] Manual compiler reset');
-	compilerPromise = null;
-	emojiLoaded = false;
-	cjkLoaded = false;
-	loadedCustomFonts.clear();
-	fontsNeedRebuild = true;
 }
 
 // ============================================================================
@@ -268,52 +292,93 @@ function referencedFile(files: Record<string, string>, diagnostic: string): stri
 }
 
 /**
+ * A failed compile with the diagnostics that explain it. `runCompile` used to
+ * join them into a string and throw, and the handler then posted an empty
+ * `diagnostics: []` — so the one thing a user could act on never arrived.
+ */
+class CompileFailure extends Error {
+	readonly diagnostics: string[];
+
+	constructor(message: string, diagnostics: string[]) {
+		super(message);
+		this.name = 'CompileFailure';
+		this.diagnostics = diagnostics;
+	}
+}
+
+/**
  * Compiles one job.
  */
 async function compilePdf(
 	files: Record<string, string>,
 	mainFile: string,
-	images: Record<string, Uint8Array<ArrayBuffer>> = {}
-): Promise<{ pdf: Uint8Array; diagnostics: string[] }> {
-	// Update last compile time for lifecycle management
-	lastCompileTime = Date.now();
+	images: CompileImages = {},
+	imageVersions: Record<string, number> = {}
+): Promise<Uint8Array<ArrayBuffer>> {
+	try {
+		const customFontPaths = detectCustomFonts(images);
 
-	// New project font files or a dropped compiler (idle reset) mean the
-	// compiler has to be rebuilt.
-	const needsRebuild =
-		fontsNeedRebuild ||
-		detectCustomFonts(images).some(path => !loadedCustomFonts.has(path));
-	if (needsRebuild) {
-		await rebuildCompilerWithFonts(images);
-	} else {
-		// The lazy font assets change the compiler's font set, so they rebuild too.
-		const allContent = Object.values(files).join('\n');
-		if (needsEmojiFont(allContent)) await upgradeCompilerWithEmoji(images);
-		if (needsCJKFont(allContent)) await upgradeCompilerWithCJK(images);
+		if (fontsNeedRebuild || !carriesFonts(customFontPaths)) {
+			// A project font appeared or disappeared, or the compiler was dropped:
+			// the font set only changes by rebuilding the compiler.
+			await rebuildCompilerWithFonts(images);
+		} else {
+			// Lazily-added font assets rebuild too. The scan only runs while one of
+			// them is still missing: it copies the whole project text.
+			if (!emojiLoaded || !cjkLoaded) {
+				const allContent = Object.values(files).join('\n');
+				if (!emojiLoaded && needsEmojiFont(allContent)) await upgradeCompilerWithEmoji(images);
+				if (!cjkLoaded && needsCJKFont(allContent)) await upgradeCompilerWithCJK(images);
+			}
+		}
+
+		return await runCompile(files, mainFile, images, imageVersions);
+	} finally {
+		// Stamped when the compile settles: stamping it *before* the work made the
+		// idle reset below unreachable (the check inside `getCompiler` compares
+		// against a timestamp the current compile had just refreshed).
+		lastCompileTime = Date.now();
 	}
-
-	return await runCompile(files, mainFile, images);
 }
 
 /** Adds the sources to the compiler and compiles the document. */
 async function runCompile(
 	files: Record<string, string>,
 	mainFile: string,
-	images: Record<string, Uint8Array<ArrayBuffer>>
-): Promise<{ pdf: Uint8Array; diagnostics: string[] }> {
+	images: CompileImages,
+	imageVersions: Record<string, number>
+): Promise<Uint8Array<ArrayBuffer>> {
 	const compiler = await getCompiler();
-	
-	// Add all source files to the virtual file system
+
+	// Add the source files that changed since the last compile: each `addSource`
+	// copies the text into the wasm world, and a compile fires on every debounced
+	// keystroke.
 	for (const [path, content] of Object.entries(files)) {
-		// Ensure paths start with /
 		const normalizedPath = path.startsWith('/') ? path : '/' + path;
+		if (sourcedFiles.get(normalizedPath) === content) continue;
 		compiler.addSource(normalizedPath, content);
+		sourcedFiles.set(normalizedPath, content);
 	}
 
-	// Add images to virtual file system
+	// Add the binaries the compiler does not have yet, and drop the ones that
+	// left the project: `mapShadow` marshals the bytes into wasm memory (a malloc
+	// + copy per file), and a stale shadow keeps a deleted image resolvable —
+	// Typst would find the file instead of reporting it as missing.
+	const present = new Set<string>()
 	for (const [path, data] of Object.entries(images)) {
 		const normalizedPath = path.startsWith('/') ? path : '/' + path;
+		present.add(normalizedPath);
+		// Version 0 is never stored, so a caller that sends none re-shadows
+		// every time instead of silently reusing an old array.
+		const version = imageVersions[path] ?? 0;
+		if (shadowedBinaries.get(normalizedPath) === version) continue;
 		compiler.mapShadow(normalizedPath, data);
+		shadowedBinaries.set(normalizedPath, version);
+	}
+	for (const path of shadowedBinaries.keys()) {
+		if (present.has(path)) continue;
+		compiler.unmapShadow(path);
+		shadowedBinaries.delete(path);
 	}
 
 	// Ensure mainFile path starts with /
@@ -328,15 +393,15 @@ async function runCompile(
 
 	// Process diagnostics
 	const diagnostics = clarifyLoadErrors((result.diagnostics ?? []).map(String), files);
-	
+
 	// Enhanced error reporting
 	if (!result.result) {
-		const errorMessage = diagnostics.length > 0 
+		const errorMessage = diagnostics.length > 0
 			? diagnostics.join('\n')
 			: 'Typst compilation failed with no diagnostic information';
-		
+
 		console.error('[Typst] Compilation failed:', errorMessage);
-		throw new Error(errorMessage);
+		throw new CompileFailure(errorMessage, diagnostics);
 	}
 
 	// Log warnings if present (even on successful compilation)
@@ -344,7 +409,19 @@ async function runCompile(
 		console.warn('[Typst] Compilation warnings:', diagnostics.join('\n'));
 	}
 
-	return { pdf: result.result, diagnostics };
+	return result.result as Uint8Array<ArrayBuffer>;
+}
+
+/**
+ * The PDF bytes ready for transfer: typst.ts hands out a fresh JS-owned array
+ * (its wasm shim copies out of wasm memory), so its buffer can be transferred
+ * as it is. Only a view into a wider buffer needs its own copy — the old code
+ * copied the whole document every time.
+ */
+function transferablePdf(pdf: Uint8Array<ArrayBuffer>): ArrayBuffer {
+	const { buffer, byteOffset, byteLength } = pdf;
+	if (byteOffset === 0 && byteLength === buffer.byteLength) return buffer;
+	return pdf.slice().buffer;
 }
 
 // ============================================================================
@@ -355,33 +432,54 @@ ctx.onmessage = (event: MessageEvent<CompileRequest>) => {
 	const message = event.data;
 	if (!message || message.type !== 'compile') return;
 
-	compileQueue = compileQueue.then(async () => {
-		try {
-			const { pdf, diagnostics } = await compilePdf(
-				message.files,
-				message.mainFile,
-				message.images
-			);
-			const pdfCopy = new Uint8Array(pdf.length);
-			pdfCopy.set(pdf);
-			ctx.postMessage(
-				{
+	// Newest wins: a job that is no longer the latest is answered without
+	// compiling — its document would be dropped by the caller's own seq guard.
+	latestRequestId = message.id;
+
+	compileQueue = compileQueue
+		.then(async () => {
+			if (message.id !== latestRequestId) {
+				postResult({
 					type: 'compile-result',
 					id: message.id,
-					ok: true,
-					pdf: pdfCopy.buffer,
+					ok: false,
+					error: 'superseded',
+					diagnostics: [],
+					superseded: true
+				});
+				return;
+			}
+
+			try {
+				const pdf = await compilePdf(message.files, message.mainFile, message.images, message.imageVersions);
+				const buffer = transferablePdf(pdf);
+				ctx.postMessage(
+					{ type: 'compile-result', id: message.id, ok: true, pdf: buffer } satisfies CompileResponse,
+					[buffer]
+				);
+			} catch (error) {
+				const diagnostics = error instanceof CompileFailure ? error.diagnostics : [];
+				const reason = error instanceof Error ? error.message : String(error);
+				console.error('[Typst] Compilation failed:', reason);
+				postResult({
+					type: 'compile-result',
+					id: message.id,
+					ok: false,
+					error: reason,
 					diagnostics
-				} satisfies CompileResponse,
-				[pdfCopy.buffer]
-			);
-		} catch (error) {
-			ctx.postMessage({
-				type: 'compile-result',
-				id: message.id,
-				ok: false,
-				error: error instanceof Error ? error.message : String(error),
-				diagnostics: []
-			} satisfies CompileResponse);
-		}
-	});
+				});
+			}
+		})
+		// The chain must never stay rejected: one throw outside the `try` above
+		// would make every later job skip its callback and the worker go silent.
+		.catch((error: unknown) => {
+			const reason = error instanceof Error ? error.message : String(error);
+			console.error('[Typst] compile queue failed:', error);
+			postResult({ type: 'compile-result', id: message.id, ok: false, error: reason, diagnostics: [] });
+		});
 };
+
+/** Posts a failure reply. */
+function postResult(response: CompileResponse): void {
+	ctx.postMessage(response);
+}

@@ -57,6 +57,9 @@ export function useTypstCompiler() {
 	// callback identity changes, which would otherwise trigger endless recompiles.
 	const compileNow = useCallback(
 		async (files: Record<string, string>, mainFile: string) => {
+			// A manual compile supersedes the pending debounced one: leaving it
+			// queued meant compiling identical content again a second later.
+			debouncedCompileRef.current?.cancel()
 			await compile(files, mainFile)
 		},
 		[compile]
