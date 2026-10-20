@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'preact/hooks'
-import { getPdfjs } from '@/lib/pdf/pdfjs'
+import { getPdfjs, PreviewEngineError, PreviewWorker } from '@/lib/pdf/pdfjs'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, PageViewport, RenderTask, TextLayer } from 'pdfjs-dist'
+
+/**
+ * Why the preview shows nothing: the engine (pdf.js or its worker) is missing,
+ * or this particular PDF could not be loaded. Only the second is something the
+ * user can fix in the document; the first wants a network check and a retry.
+ */
+export interface PreviewLoadError {
+	kind: 'engine' | 'document'
+	/** The underlying message, shown under the localized headline. */
+	detail: string
+}
 
 interface UsePdfRendererProps {
 	pdfUrl: string | null
@@ -40,11 +51,13 @@ const WIDTH_EPSILON = 1
 
 export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageChange }: UsePdfRendererProps) {
 	const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null)
-	// Loading task per loaded document: only it can destroy what it created.
-	const loadingTasks = useRef(new WeakMap<PDFDocumentProxy, PDFDocumentLoadingTask>())
+	// Loading task per loaded document: only it can destroy what it created. The
+	// worker rides along because pdf.js was handed it as a port and therefore
+	// cannot stop it either.
+	const loadingTasks = useRef(new WeakMap<PDFDocumentProxy, { task: PDFDocumentLoadingTask; worker: PreviewWorker }>())
 	const [totalPages, setTotalPages] = useState(1)
 	const [isRendering, setIsRendering] = useState(false)
-	const [loadError, setLoadError] = useState<string | null>(null)
+	const [loadError, setLoadError] = useState<PreviewLoadError | null>(null)
 	const [containerWidth, setContainerWidth] = useState(0)
 	const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
 	const textLayerRefs = useRef<Map<number, HTMLDivElement>>(new Map())
@@ -118,13 +131,30 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 		let mounted = true
 
 		const loadPdf = async () => {
+			// The worker is per document and *ours*: pdf.js is handed it as a port, so
+			// a worker that never starts must be reported from here (see PreviewWorker).
+			// Ownership moves to `loadingTasks` once a document exists, and `finally`
+			// cleans up whatever never got that far.
+			let worker: PreviewWorker | null = null
 			try {
 				const pdfjs = await getPdfjs()
+				worker = new PreviewWorker()
+				// Before the port changes hands: pdf.js sends to it as soon as it is
+				// handed over, and a module worker drops messages posted before its
+				// handler exists.
+				await worker.ready
+				// Read synchronously by `getDocument`, so no other load can slip its own
+				// port in between this assignment and the call.
+				pdfjs.GlobalWorkerOptions.workerPort = worker.port
 				const loadingTask = pdfjs.getDocument({ url: pdfUrl })
-				const pdf = await loadingTask.promise
+				// pdf.js resolves its own worker promise as soon as it is handed a port
+				// and then waits for a reply; a dead worker would leave this pending
+				// forever, hence the race against the worker's failure.
+				const pdf = await Promise.race([loadingTask.promise, worker.failure])
 
 				if (mounted) {
-					loadingTasks.current.set(pdf, loadingTask)
+					loadingTasks.current.set(pdf, { task: loadingTask, worker })
+					worker = null
 					setLoadError(null)
 					setPdfDoc(pdf)
 					setTotalPages(pdf.numPages)
@@ -137,7 +167,14 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 				}
 			} catch (error) {
 				console.error('Failed to load PDF:', error)
-				if (mounted) setLoadError(error instanceof Error ? error.message : String(error))
+				if (mounted) {
+					setLoadError({
+						kind: error instanceof PreviewEngineError ? 'engine' : 'document',
+						detail: error instanceof Error ? error.message : String(error)
+					})
+				}
+			} finally {
+				worker?.dispose()
 			}
 		}
 
@@ -456,9 +493,11 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 	// than on `PDFDocumentProxy`, hence the pairing. Declared after the render effect on
 	// purpose — that one cancels the in-flight render tasks first.
 	useEffect(() => {
-		const task = pdfDoc ? loadingTasks.current.get(pdfDoc) : undefined
+		const owned = pdfDoc ? loadingTasks.current.get(pdfDoc) : undefined
 		return () => {
-			void task?.destroy()
+			if (!owned) return
+			void owned.task.destroy()
+			owned.worker.dispose()
 		}
 	}, [pdfDoc])
 
@@ -532,6 +571,8 @@ export function usePdfRenderer({ pdfUrl, currentPage, zoom, isCollapsed, onPageC
 		totalPages,
 		isRendering,
 		loadError,
+		/** A document is loaded and renderable; false while loading or after a failure. */
+		hasDocument: pdfDoc !== null,
 		canvasRefs,
 		pageRefs,
 		textLayerRefs,
