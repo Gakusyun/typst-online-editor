@@ -13,7 +13,7 @@ export default function PdfPlaceholder({ status, errorMsg, hasCompiled }: PdfPla
 
 	return (
 		<div className="flex items-center justify-center h-full">
-			<div className="text-center text-gray-400">
+			<div className="text-center text-gray-400" role="status">
 				{status === 'compiling' && (
 					<p className="text-lg flex items-center justify-center gap-2">
 						<Loader2 className="w-5 h-5 animate-spin" />

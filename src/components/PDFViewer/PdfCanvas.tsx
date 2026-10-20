@@ -1,14 +1,8 @@
 import { Loader2 } from 'lucide-preact'
 import type { RefObject } from 'preact'
-import type { RenderTask } from 'pdfjs-dist'
-
-interface CanvasInfo {
-	canvas: HTMLCanvasElement
-	renderTask: RenderTask | null
-}
 
 interface PdfCanvasProps {
-	canvasRefs: RefObject<Map<number, CanvasInfo>>
+	canvasRefs: RefObject<Map<number, HTMLCanvasElement>>
 	pageRefs: RefObject<Map<number, HTMLDivElement>>
 	textLayerRefs: RefObject<Map<number, HTMLDivElement>>
 	annotationLayerRefs: RefObject<Map<number, HTMLDivElement>>
@@ -17,11 +11,22 @@ interface PdfCanvasProps {
 	totalPages: number
 }
 
+/**
+ * Preact calls a function ref again on every render (its identity changes) and calls it
+ * with `null` when the element goes away — a collapsed preview, or the pages a shorter
+ * document drops. The page maps are therefore written idempotently, with the element as
+ * its own key and `null` meaning "this page is gone".
+ */
+function track<T>(map: RefObject<Map<number, T>>, pageNum: number, element: T | null) {
+	if (element) map.current.set(pageNum, element)
+	else map.current.delete(pageNum)
+}
+
 export default function PdfCanvas({ canvasRefs, pageRefs, textLayerRefs, annotationLayerRefs, containerRef, isRendering, totalPages }: PdfCanvasProps) {
 	return (
 		<div className="preview-container relative flex-1 bg-gray-100">
 			{isRendering && (
-				<div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
+				<div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10" role="status">
 					<Loader2 className="w-8 h-8 animate-spin text-gray-600" />
 				</div>
 			)}
@@ -33,11 +38,7 @@ export default function PdfCanvas({ canvasRefs, pageRefs, textLayerRefs, annotat
 					{Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
 						<div
 							key={pageNum}
-							ref={(el) => {
-								if (el) {
-									pageRefs.current.set(pageNum, el)
-								}
-							}}
+							ref={(el) => track(pageRefs, pageNum, el)}
 							className="page mx-auto my-4 first:mt-0"
 							style={{
 								boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)'
@@ -45,28 +46,16 @@ export default function PdfCanvas({ canvasRefs, pageRefs, textLayerRefs, annotat
 						>
 							<div className="canvasWrapper bg-white relative">
 								<canvas
-									ref={(el) => {
-										if (el) {
-											canvasRefs.current.set(pageNum, { canvas: el, renderTask: null })
-										}
-									}}
+									ref={(el) => track(canvasRefs, pageNum, el)}
 									className="block"
 									role="presentation"
 								/>
 								<div
-									ref={(el) => {
-										if (el) {
-											textLayerRefs.current.set(pageNum, el)
-										}
-									}}
+									ref={(el) => track(textLayerRefs, pageNum, el)}
 									className="textLayer"
 								/>
 								<div
-									ref={(el) => {
-										if (el) {
-											annotationLayerRefs.current.set(pageNum, el)
-										}
-									}}
+									ref={(el) => track(annotationLayerRefs, pageNum, el)}
 									className="annotationLayer"
 								/>
 							</div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { Info, Sliders, Sparkles, Type, X } from 'lucide-preact'
 import type { ComponentType } from 'preact'
 import { version } from '../../../package.json'
@@ -34,6 +34,10 @@ const TABS: { id: SettingsTab; label: MessageKey; icon: ComponentType<{ classNam
 	{ id: 'about', label: 'settings.tabAbout', icon: Info },
 ]
 
+/** Everything Tab may land on inside the dialog, for the focus trap. */
+const FOCUSABLE =
+	'button:not([disabled]), a[href], select, input, textarea, [tabindex]:not([tabindex="-1"])'
+
 export default function SettingsDialog({
 	initialTab = 'general',
 	isMobile = false,
@@ -44,13 +48,45 @@ export default function SettingsDialog({
 	const { t, langSetting, setLangSetting } = useI18n()
 	const { editorWordWrap, setEditorWordWrap } = useAppearance()
 	const [tab, setTab] = useState<SettingsTab>(initialTab)
+	const panelRef = useRef<HTMLDivElement | null>(null)
+	const restoreFocusRef = useRef<HTMLElement | null>(null)
 
 	useEffect(() => {
+		// Remember what had focus so Escape/close hands it back instead of
+		// dropping the user at the top of the document.
+		restoreFocusRef.current =
+			document.activeElement instanceof HTMLElement ? document.activeElement : null
+		const panel = panelRef.current
+		const first = panel?.querySelector<HTMLElement>(FOCUSABLE)
+		;(first ?? panel)?.focus()
+
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onClose()
+			if (e.key === 'Escape') {
+				onClose()
+				return
+			}
+			if (e.key !== 'Tab' || !panel) return
+			// Tab must not walk into the workspace behind the dialog.
+			const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+				(el) => el.offsetParent !== null
+			)
+			if (focusable.length === 0) return
+			const first = focusable[0]
+			const last = focusable[focusable.length - 1]
+			const active = document.activeElement
+			if (e.shiftKey && (active === first || !panel.contains(active))) {
+				e.preventDefault()
+				last.focus()
+			} else if (!e.shiftKey && (active === last || !panel.contains(active))) {
+				e.preventDefault()
+				first.focus()
+			}
 		}
 		window.addEventListener('keydown', onKeyDown)
-		return () => window.removeEventListener('keydown', onKeyDown)
+		return () => {
+			window.removeEventListener('keydown', onKeyDown)
+			restoreFocusRef.current?.focus()
+		}
 	}, [onClose])
 
 	return (
@@ -63,6 +99,11 @@ export default function SettingsDialog({
 			onClick={isMobile ? undefined : onClose}
 		>
 			<div
+				ref={panelRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="settings-dialog-title"
+				tabIndex={-1}
 				className={
 					isMobile
 						? 'flex h-full w-full flex-col overflow-hidden bg-gray-800'
@@ -70,13 +111,16 @@ export default function SettingsDialog({
 				}
 				onClick={(e) => e.stopPropagation()}
 			>
-				<div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-					<h2 className="text-base font-semibold">{t('settings.title')}</h2>
-					<button
-						onClick={onClose}
-						className="p-1 rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
-						title={t('common.close')}
-					>
+			<div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+				<h2 id="settings-dialog-title" className="text-base font-semibold">
+					{t('settings.title')}
+				</h2>
+				<button
+					onClick={onClose}
+					className="p-1 rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
+					title={t('common.close')}
+					aria-label={t('common.close')}
+				>
 						<X className="w-4 h-4" />
 					</button>
 				</div>

@@ -1,4 +1,3 @@
-
 import { useState } from 'preact/hooks'
 import type { CompileStatus } from '@/lib/typst/TypstCompilerService'
 import { usePdfRenderer } from './hooks/usePdfRenderer'
@@ -11,8 +10,6 @@ interface PdfPreviewProps {
 	status: CompileStatus
 	errorMsg: string | null
 	hasCompiled: boolean
-	fileCount: number
-	charCount: number
 	isCollapsed: boolean
 	onToggleCollapse: () => void
 }
@@ -21,7 +18,7 @@ export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCo
 	const [zoom, setZoom] = useState(100)
 	const [currentPage, setCurrentPage] = useState(1)
 	
-	const { totalPages, isRendering, canvasRefs, pageRefs, textLayerRefs, annotationLayerRefs, containerRef, scrollToPage } = usePdfRenderer({
+	const { totalPages, isRendering, loadError, canvasRefs, pageRefs, textLayerRefs, annotationLayerRefs, containerRef, scrollToPage } = usePdfRenderer({
 		pdfUrl,
 		currentPage,
 		zoom,
@@ -29,11 +26,16 @@ export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCo
 		onPageChange: setCurrentPage
 	})
 	
+	// 50–200% in 25% steps; the toolbar's disabled zoom-out matches this floor.
 	const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 200))
 	const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50))
 	const handleZoomFit = () => setZoom(100)
 	const handlePrevPage = () => scrollToPage(Math.max(currentPage - 1, 1))
 	const handleNextPage = () => scrollToPage(Math.min(currentPage + 1, totalPages))
+	
+	// A document pdf.js refused (or could not fetch) rides the banner that already
+	// exists for a failed compile.
+	const previewError = errorMsg ?? loadError
 	
 	return (
 		<div className="h-full flex py-1 flex-col bg-gray-800">
@@ -53,9 +55,9 @@ export default function PdfPreview({ pdfUrl, status, errorMsg, hasCompiled, isCo
 			
 			{!isCollapsed && (
 				<>
-					{errorMsg && pdfUrl && (
+					{previewError && pdfUrl && (
 						<div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-xs text-red-300 overflow-auto" style={{ maxHeight: '6rem' }}>
-							<pre className="m-0 font-mono whitespace-pre-wrap break-words">{errorMsg}</pre>
+							<pre className="m-0 font-mono whitespace-pre-wrap break-words">{previewError}</pre>
 						</div>
 					)}
 					{pdfUrl ? (

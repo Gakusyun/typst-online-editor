@@ -1,7 +1,9 @@
 
+import { AlertTriangle } from 'lucide-preact'
 import { useState, useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { downloadPdfFromUrl } from '@/lib/utils/helpers'
 import { readLayoutPreferences, writeLayoutPreferences } from '@/lib/storage/LayoutStorage'
+import { useI18n } from '@/lib/i18n/useI18n'
 import FileExplorer from '../FileExplorer'
 import TypstEditorHeader from './TypstEditorHeader'
 import SettingsDialog, { type SettingsTab } from './SettingsDialog'
@@ -53,7 +55,20 @@ function clampWidth(width: number, min: number, max: number): number {
 	return Math.min(Math.max(width, min), max)
 }
 
+/**
+ * Image and font extensions. `CodeEditor`'s upload path and the zip import keep
+ * these files in the same `files` array as the sources, holding base64 `data:`
+ * URLs — a multi-megabyte prompt if one is handed to the model as "the code".
+ */
+const BINARY_FILE_RE = /\.(png|jpe?g|gif|bmp|webp|svg|ttf|otf|woff2?)$/i
+
+/** Whether a project file is a binary asset (image or font) rather than a source. */
+function isBinaryFile(path: string, content: string): boolean {
+	return content.startsWith('data:') || BINARY_FILE_RE.test(path)
+}
+
 export default function TypstEditor() {
+	const { t } = useI18n()
 	/** The arrangement the user left behind; every field falls back to the preset. */
 	const storedLayout = useMemo(() => readLayoutPreferences(), [])
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(storedLayout.sidebarCollapsed ?? false)
@@ -149,10 +164,10 @@ export default function TypstEditor() {
 	const {
 		currentProject,
 		activeFilePath,
-		getActiveFile,
 		updateActiveFileContent,
 		handleFileSelect,
 		handleFileCreate,
+		handleFilesCreate,
 		handleFolderCreate,
 		handleFileRename,
 		handleFileMove,
@@ -160,10 +175,18 @@ export default function TypstEditor() {
 		renameProject,
 		handleProjectImport,
 		handleProjectExport,
+		storageError,
 	} = useProjectManagement(handleProjectChange)
 
 	const { settings: aiSettings, updateSettings: updateAiSettings } = useAiSettings()
 	const selectionStore = useEditorSelection()
+
+	/**
+	 * Whether the assistant may edit the active file: an image or a font is
+	 * stored as a base64 `data:` URL in the same file list and has no source.
+	 */
+	const activeFile = currentProject.files.find((file) => file.path === activeFilePath)
+	const canEditActiveFile = !isBinaryFile(activeFilePath, activeFile?.content ?? '')
 
 	// A docked panel takes its own column out of the workspace (see the desktop
 	// layout below) — the preview keeps the other half of the right side, so
@@ -188,9 +211,13 @@ export default function TypstEditor() {
 
 	/** What the model may rewrite, snapshotted when a request is sent. */
 	const getAiTarget = useCallback(
-		(scope: AiEditScope): AiEditTarget => {
+		(scope: AiEditScope): AiEditTarget | null => {
 			const { files, activeFilePath } = latestRef.current
 			const content = files.find((file) => file.path === activeFilePath)?.content ?? ''
+			// A binary asset (image or font — the file list holds them as base64
+			// `data:` URLs) has no source to rewrite, and sending it as "the code"
+			// would push megabytes of base64 into the prompt.
+			if (isBinaryFile(activeFilePath, content)) return null
 			const selection = selectionStore.get()
 			if (scope === 'selection' && selection) {
 				return {
@@ -226,10 +253,17 @@ export default function TypstEditor() {
 			// The document may have shrunk while the model was answering.
 			const from = Math.min(target.selection.from, content.length)
 			const to = Math.min(target.selection.to, content.length)
+			// The selection must still be the text the request was made against:
+			// editing inside or above it while the model answered would splice the
+			// reply into whatever now occupies that range.
+			if (content.slice(from, to) !== target.code) {
+				alert(t('ai.applyStaleSelection'))
+				return
+			}
 			next = content.slice(0, from) + code + content.slice(to)
 		}
 		if (next !== content) updateContentRef.current(next)
-	}, [])
+	}, [t])
 	
 	/** Whether the editor handle has been dragged (then its width is the user's).
 	 * A width restored from the last visit is the user's too. */
@@ -364,6 +398,18 @@ export default function TypstEditor() {
 				onTogglePreview={() => toggleMobilePanel('preview')}
 			/>
 
+			{storageError && (
+				// A write the browser refused (quota, blocked storage) is the one
+				// failure the user has to know about: the document looks saved.
+				<div
+					role="alert"
+					className="flex items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200"
+				>
+					<AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+					{storageError}
+				</div>
+			)}
+
 			{settingsTab && (
 				<SettingsDialog
 					initialTab={settingsTab}
@@ -386,6 +432,7 @@ export default function TypstEditor() {
 				fullPage={isMobile}
 				getTarget={getAiTarget}
 				onApply={applyAiEdit}
+				canEdit={canEditActiveFile}
 				onOpenSettings={() => setSettingsTab('ai')}
 			/>
 
@@ -402,6 +449,7 @@ export default function TypstEditor() {
 							closeMobilePanel()
 						}}
 						onFileCreate={handleFileCreate}
+						onFilesCreate={handleFilesCreate}
 						onFolderCreate={handleFolderCreate}
 						onFileDelete={handleFileDelete}
 						onFileRename={handleFileRename}
@@ -422,8 +470,6 @@ export default function TypstEditor() {
 						status={status}
 						errorMsg={errorMsg}
 						hasCompiled={hasCompiled}
-						fileCount={currentProject.files.length}
-						charCount={getActiveFile()?.content.length || 0}
 						isCollapsed={false}
 						onToggleCollapse={closeMobilePanel}
 					/>
@@ -466,6 +512,7 @@ export default function TypstEditor() {
 							activeFile={activeFilePath}
 							onFileSelect={handleFileSelect}
 							onFileCreate={handleFileCreate}
+							onFilesCreate={handleFilesCreate}
 							onFolderCreate={handleFolderCreate}
 							onFileDelete={handleFileDelete}
 							onFileRename={handleFileRename}
@@ -482,7 +529,19 @@ export default function TypstEditor() {
 					{!isSidebarCollapsed && (
 						<ResizeHandle
 							isResizing={sidebarResize.isResizing}
-							onMouseDown={sidebarResize.startResize}
+							onPointerDown={sidebarResize.startResize}
+							value={sidebarResize.value}
+							min={SIDEBAR_MIN_WIDTH}
+							max={SIDEBAR_MAX_WIDTH}
+							// An arrow key is a resize like any other, but it never sets
+							// `isResizing`, so the drag-end persist below would miss it.
+							onResize={(value) => {
+								sidebarResize.resizeTo(value)
+								writeLayoutPreferences({
+									sidebarWidth: value,
+									editorWidth: editorResize.value,
+								})
+							}}
 						/>
 					)}
 
@@ -512,7 +571,17 @@ export default function TypstEditor() {
 						{(!isPreviewCollapsed || aiTakesSideSlot) && (
 							<ResizeHandle
 								isResizing={editorResize.isResizing}
-								onMouseDown={editorResize.startResize}
+								onPointerDown={editorResize.startResize}
+								value={editorResize.value}
+								min={EDITOR_MIN_WIDTH}
+								max={editorResize.maxValue}
+								onResize={(value) => {
+									editorResize.resizeTo(value)
+									writeLayoutPreferences({
+										sidebarWidth: sidebarResize.value,
+										editorWidth: value,
+									})
+								}}
 							/>
 						)}
 
@@ -540,8 +609,6 @@ export default function TypstEditor() {
 								status={status}
 								errorMsg={errorMsg}
 								hasCompiled={hasCompiled}
-								fileCount={currentProject.files.length}
-								charCount={getActiveFile()?.content.length || 0}
 								isCollapsed={isPreviewCollapsed || aiTakesSideSlot}
 								onToggleCollapse={togglePreview}
 							/>

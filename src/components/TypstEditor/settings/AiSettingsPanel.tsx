@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { Eye, EyeOff, RotateCcw } from 'lucide-preact'
+import { Eye, EyeOff, RotateCcw, Trash2 } from 'lucide-preact'
 import { useI18n } from '@/lib/i18n/useI18n'
 import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, type AiSettings } from '@/lib/ai/aiSettings'
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/ai/prompt'
@@ -85,8 +85,22 @@ export default function AiSettingsPanel({ settings, onChange }: AiSettingsPanelP
 						onClick={() => setShowKey((show) => !show)}
 						className="shrink-0 p-2 text-gray-400 rounded hover:bg-gray-700 hover:text-gray-200 transition-colors"
 						title={t(showKey ? 'settings.aiHideKey' : 'settings.aiShowKey')}
+						aria-label={t(showKey ? 'settings.aiHideKey' : 'settings.aiShowKey')}
 					>
 						{showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+					</button>
+					<button
+						// The token sits in plain `localStorage`; forgetting it must not
+						// depend on the user clearing a masked field by hand.
+						onClick={() => {
+							setApiKey('')
+							onChange({ apiKey: '' })
+						}}
+						className="shrink-0 p-2 text-gray-400 rounded hover:bg-gray-700 hover:text-gray-200 transition-colors"
+						title={t('settings.aiClearKey')}
+						aria-label={t('settings.aiClearKey')}
+					>
+						<Trash2 className="w-4 h-4" />
 					</button>
 				</div>
 				<p className="mt-1 text-xs text-gray-500">{t('settings.aiApiKeyHint')}</p>

@@ -36,6 +36,7 @@ export default function PdfToolbar({
 					onClick={onToggleCollapse}
 					className="p-3 hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
 					title={t('preview.show')}
+					aria-label={t('preview.show')}
 				>
 					<Eye className="w-5 h-5" />
 				</button>
@@ -55,6 +56,7 @@ export default function PdfToolbar({
 							onClick={onPrevPage}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 							title={t('preview.prevPage')}
+							aria-label={t('preview.prevPage')}
 							disabled={currentPage <= 1}
 						>
 							<ChevronLeft className="w-4 h-4" />
@@ -66,6 +68,7 @@ export default function PdfToolbar({
 							onClick={onNextPage}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 							title={t('preview.nextPage')}
+							aria-label={t('preview.nextPage')}
 							disabled={currentPage >= totalPages}
 						>
 							<ChevronRight className="w-4 h-4" />
@@ -76,11 +79,14 @@ export default function PdfToolbar({
 
 					{/* Zoom Controls */}
 					<div className="flex items-center gap-1">
+						{/* The floor matches `handleZoomOut` in PdfPreview: the two used to
+						    disagree, which made 50–75% unreachable. */}
 						<button
 							onClick={onZoomOut}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 							title={t('preview.zoomOut')}
-							disabled={zoom <= 100}
+							aria-label={t('preview.zoomOut')}
+							disabled={zoom <= 50}
 						>
 							<ZoomOut className="w-4 h-4" />
 						</button>
@@ -88,6 +94,7 @@ export default function PdfToolbar({
 							onClick={onZoomFit}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
 							title={t('preview.zoomToFit')}
+							aria-label={t('preview.zoomToFit')}
 						>
 							<Minimize2 className="w-4 h-4" />
 						</button>
@@ -95,6 +102,7 @@ export default function PdfToolbar({
 							onClick={onZoomIn}
 							className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 							title={t('preview.zoomIn')}
+							aria-label={t('preview.zoomIn')}
 							disabled={zoom >= 200}
 						>
 							<ZoomIn className="w-4 h-4" />
@@ -109,6 +117,7 @@ export default function PdfToolbar({
 						onClick={() => window.open(pdfUrl, '_blank')}
 						className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
 						title={t('preview.openInNewTab')}
+						aria-label={t('preview.openInNewTab')}
 					>
 						<Maximize2 className="w-4 h-4" />
 					</button>
@@ -118,6 +127,7 @@ export default function PdfToolbar({
 						onClick={onToggleCollapse}
 						className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
 						title={t('preview.close')}
+						aria-label={t('preview.close')}
 					>
 						<X className="w-4 h-4" />
 					</button>

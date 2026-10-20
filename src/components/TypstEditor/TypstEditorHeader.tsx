@@ -123,6 +123,7 @@ export default function TypstEditorHeader({
 							rel="noopener noreferrer"
 							className="p-1.5 text-white rounded hover:bg-gray-600 transition-transform duration-200"
 							title={t('header.viewOnGithub')}
+							aria-label={t('header.viewOnGithub')}
 						>
 							<Github className="w-4 h-4" />
 						</a>
@@ -135,6 +136,7 @@ export default function TypstEditorHeader({
 							rel="noopener noreferrer"
 							className="p-1.5 text-white rounded hover:bg-gray-600 transition-transform duration-200"
 							title={t('header.viewOnGithub')}
+							aria-label={t('header.viewOnGithub')}
 						>
 						<Github className="w-4 h-4" />
 						</a>
@@ -142,7 +144,11 @@ export default function TypstEditorHeader({
 			</div>
 			<div className="flex items-center gap-4">
 				<div className="flex flex-row items-center gap-2 md:justify-end md:w-auto justify-between w-full">
-					{(!isMobile || !hasCompiled) && getStatusText()}
+					{(!isMobile || !hasCompiled) && (
+						<span role="status" aria-live="polite">
+							{getStatusText()}
+						</span>
+					)}
 				</div>
 				{!isMobile && (
 					<button
@@ -169,6 +175,7 @@ export default function TypstEditorHeader({
 								filesOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
 							}`}
 							title={filesOpen ? t('files.hide') : t('files.show')}
+							aria-label={filesOpen ? t('files.hide') : t('files.show')}
 						>
 							<FolderTree className="w-4 h-4" />
 						</button>
@@ -178,6 +185,7 @@ export default function TypstEditorHeader({
 								previewOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
 							}`}
 							title={previewOpen ? t('preview.close') : t('preview.show')}
+							aria-label={previewOpen ? t('preview.close') : t('preview.show')}
 						>
 							<Eye className="w-4 h-4" />
 						</button>
@@ -189,6 +197,7 @@ export default function TypstEditorHeader({
 						aiOpen ? 'bg-blue-600 text-white' : 'text-white hover:bg-gray-600'
 					}`}
 					title={t('header.aiAssistant')}
+					aria-label={t('header.aiAssistant')}
 				>
 					<Sparkles className="w-4 h-4" />
 				</button>
@@ -196,6 +205,7 @@ export default function TypstEditorHeader({
 					onClick={onOpenSettings}
 					className="p-1.5 text-white rounded hover:bg-gray-600 transition-colors"
 					title={t('settings.title')}
+					aria-label={t('settings.title')}
 				>
 					<Settings className="w-4 h-4" />
 				</button>
